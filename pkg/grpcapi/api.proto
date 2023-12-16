@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package grpcapi;
+
+option go_package = "github.com/JyotinderSingh/task-queue/pkg/grpcapi";
+
+// The worker service definition.
+service WorkerService {
+  // Sends a task to the worker
+  rpc SendTask (TaskRequest) returns (TaskResponse) {}
+}
+
+// The request message containing the task data.
+message TaskRequest {
+  string data = 1;
+}
+
+// The response message containing the task result.
+message TaskResponse {
+  string result = 1;
+  bool success = 2;
+}
