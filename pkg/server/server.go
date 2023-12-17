@@ -18,20 +18,20 @@ import (
 	"github.com/google/uuid"
 )
 
-// Server represents the server structure with necessary fields.
-type Server struct {
+// CoordinatorServer represents the server structure with necessary fields.
+type CoordinatorServer struct {
 	grpcConnection      *grpc.ClientConn
 	workerServiceClient pb.WorkerServiceClient
 	httpServer          *http.Server
 }
 
 // NewServer initializes and returns a new Server instance.
-func NewServer() *Server {
-	return &Server{}
+func NewServer() *CoordinatorServer {
+	return &CoordinatorServer{}
 }
 
 // Start initiates the server's operations.
-func (s *Server) Start() error {
+func (s *CoordinatorServer) Start() error {
 	if err := s.setupGRPCConnection(); err != nil {
 		return err
 	}
@@ -45,7 +45,7 @@ func (s *Server) Start() error {
 }
 
 // setupGRPCConnection establishes a connection to the gRPC server.
-func (s *Server) setupGRPCConnection() error {
+func (s *CoordinatorServer) setupGRPCConnection() error {
 	log.Println("Connecting to worker...")
 	conn, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
@@ -59,7 +59,7 @@ func (s *Server) setupGRPCConnection() error {
 }
 
 // startHTTPServer starts the HTTP server to handle incoming requests.
-func (s *Server) startHTTPServer() error {
+func (s *CoordinatorServer) startHTTPServer() error {
 	s.httpServer = &http.Server{Addr: ":8080", Handler: nil}
 	http.HandleFunc("/", s.handleTaskRequest)
 
@@ -80,7 +80,7 @@ func (s *Server) startHTTPServer() error {
 }
 
 // awaitShutdown waits for termination signals and gracefully shuts down the server.
-func (s *Server) awaitShutdown() error {
+func (s *CoordinatorServer) awaitShutdown() error {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
@@ -89,7 +89,7 @@ func (s *Server) awaitShutdown() error {
 }
 
 // shutdownHTTPServer handles the graceful shutdown of the HTTP server.
-func (s *Server) shutdownHTTPServer() error {
+func (s *CoordinatorServer) shutdownHTTPServer() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -100,7 +100,7 @@ func (s *Server) shutdownHTTPServer() error {
 }
 
 // handleTaskRequest processes the HTTP request for task submission.
-func (s *Server) handleTaskRequest(w http.ResponseWriter, r *http.Request) {
+func (s *CoordinatorServer) handleTaskRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
@@ -127,7 +127,7 @@ func (s *Server) handleTaskRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // submitTask performs the gRPC call to send a task to the worker.
-func (s *Server) submitTask(task *pb.TaskRequest) error {
+func (s *CoordinatorServer) submitTask(task *pb.TaskRequest) error {
 	_, err := s.workerServiceClient.SubmitTask(context.Background(), task)
 	if err != nil {
 		return fmt.Errorf("task could not be submitted: %w", err)
@@ -136,7 +136,7 @@ func (s *Server) submitTask(task *pb.TaskRequest) error {
 }
 
 // Stop gracefully shuts down the server.
-func (s *Server) Stop() error {
+func (s *CoordinatorServer) Stop() error {
 	if s.httpServer != nil {
 		if err := s.shutdownHTTPServer(); err != nil {
 			return err

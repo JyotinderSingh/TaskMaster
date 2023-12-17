@@ -15,7 +15,7 @@ import (
 	"github.com/JyotinderSingh/task-queue/pkg/worker"
 )
 
-var s *server.Server
+var s *server.CoordinatorServer
 var w *worker.WorkerServer
 
 func TestMain(m *testing.M) {
