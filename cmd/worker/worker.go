@@ -9,6 +9,7 @@ func main() {
 	// Initialize configuration
 	// Set up logging, database connections, etc.
 
-	worker.Start() // Create a new server instance
+	workerServer := worker.NewServer() // Create a new server instance
+	workerServer.Start()
 	// Handle graceful shutdown
 }

@@ -14,6 +14,4 @@ func main() {
 	srv := server.NewServer() // Create a new server instance
 	fmt.Println("Starting server")
 	srv.Start() // Start the server
-	fmt.Println("Stopping server")
-	// Handle graceful shutdown
 }

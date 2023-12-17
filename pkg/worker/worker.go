@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net"
 	"time"
@@ -11,6 +10,11 @@ import (
 	"google.golang.org/grpc"
 )
 
+type workerServer struct {
+	listener     net.Listener
+	workerServer *grpc.Server
+}
+
 type workerServiceServer struct {
 	pb.UnimplementedWorkerServiceServer
 }
@@ -18,25 +22,32 @@ type workerServiceServer struct {
 func (s *workerServiceServer) SendTask(ctx context.Context, in *pb.TaskRequest) (*pb.TaskResponse, error) {
 	log.Printf("Received: %v", in.GetData())
 	// Process the task asynchronously
-	go processTask(in.GetData())
-	return &pb.TaskResponse{Result: "Task received and is being processed"}, nil
+	processTask(in.GetData())
+	return &pb.TaskResponse{Result: "Task processed"}, nil
 }
 
 func processTask(data string) {
 	// Process the task data
-	fmt.Println("Starting Task", data)
+	log.Println("Starting Task", data)
 	time.Sleep(5 * time.Second)
-	fmt.Println("Completed Task", data)
+	log.Println("Completed Task", data)
 }
 
-func Start() {
-	lis, err := net.Listen("tcp", ":50051")
+func (w *workerServer) Start() {
+	PORT := ":50051"
+	lis, err := net.Listen("tcp", PORT)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	s := grpc.NewServer()
-	pb.RegisterWorkerServiceServer(s, &workerServiceServer{})
-	if err := s.Serve(lis); err != nil {
+	log.Println("Started worker server at", PORT)
+	w.listener = lis
+	w.workerServer = grpc.NewServer()
+	pb.RegisterWorkerServiceServer(w.workerServer, &workerServiceServer{})
+	if err := w.workerServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
+}
+
+func NewServer() workerServer {
+	return workerServer{}
 }

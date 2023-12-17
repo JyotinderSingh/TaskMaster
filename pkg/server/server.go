@@ -18,8 +18,8 @@ type server struct {
 	workerServiceClient pb.WorkerServiceClient
 }
 
-func (s *server) sendTaskToWorker(c pb.WorkerServiceClient, data string) {
-	_, err := c.SendTask(context.Background(), &pb.TaskRequest{Data: data})
+func (s *server) sendTaskToWorker(data string) {
+	_, err := s.workerServiceClient.SendTask(context.Background(), &pb.TaskRequest{Data: data})
 	if err != nil {
 		log.Fatalf("could not send task: %v", err)
 	}
@@ -31,7 +31,7 @@ func (s *server) handleTaskRequest(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			http.Error(w, "Error reading request body", http.StatusInternalServerError)
 		}
-		go s.sendTaskToWorker(s.workerServiceClient, string(body))
+		go s.sendTaskToWorker(string(body))
 		fmt.Fprintf(w, "Task sent to worker")
 	} else {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -52,12 +52,13 @@ func (s *server) connectToWorker() {
 }
 
 func (s *server) Start() {
-	fmt.Println("Connecting to worker...")
+	log.Println("Connecting to worker...")
 	s.connectToWorker()
 	defer s.grpcConnection.Close()
-	fmt.Println("Connected to worker!")
+	log.Println("Connected to worker!")
 
 	http.HandleFunc("/", s.handleTaskRequest)
+	log.Println("Starting front end server at :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
