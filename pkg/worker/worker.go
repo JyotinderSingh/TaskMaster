@@ -10,63 +10,73 @@ import (
 	"google.golang.org/grpc"
 )
 
+const serverPort = ":50051"
+
+// WorkerServer represents a gRPC server for handling worker tasks.
 type WorkerServer struct {
-	listener     net.Listener
-	workerServer *grpc.Server
-}
-
-type workerServiceServer struct {
 	pb.UnimplementedWorkerServiceServer
+	listener   net.Listener
+	grpcServer *grpc.Server
 }
 
-func (s *workerServiceServer) SubmitTask(ctx context.Context, in *pb.TaskRequest) (*pb.TaskResponse, error) {
-	log.Printf("Received: %v", in.GetData())
-	// Process the task asynchronously
-	go processTask(in.GetData())
-	return &pb.TaskResponse{Message: "Task was submitted", Success: true, TaskId: in.TaskId}, nil
+// NewServer creates and returns a new WorkerServer.
+func NewServer() *WorkerServer {
+	return &WorkerServer{}
 }
 
-func processTask(data string) {
-	// Process the task data
-	log.Println("Starting Task", data)
-	time.Sleep(5 * time.Second)
-	log.Println("Completed Task", data)
-}
-
+// Start initializes and starts the WorkerServer.
 func (w *WorkerServer) Start() error {
-	PORT := ":50051"
-	lis, err := net.Listen("tcp", PORT)
+	var err error
+	w.listener, err = net.Listen("tcp", serverPort)
 	if err != nil {
-		log.Printf("failed to listen: %v", err)
-		return err // Return the error instead of logging fatal
-	}
-	log.Println("Started worker server at", PORT)
-	w.listener = lis
-	w.workerServer = grpc.NewServer()
-	pb.RegisterWorkerServiceServer(w.workerServer, &workerServiceServer{})
-	if err := w.workerServer.Serve(lis); err != nil {
-		log.Printf("failed to serve: %v", err)
-		return err // Return the error instead of logging fatal
+		log.Printf("Failed to listen: %v", err)
+		return err
 	}
 
-	return nil // Return nil if no errors occurred
+	log.Println("Starting worker server on", serverPort)
+	w.grpcServer = grpc.NewServer()
+	pb.RegisterWorkerServiceServer(w.grpcServer, &WorkerServer{})
+
+	if err := w.grpcServer.Serve(w.listener); err != nil {
+		log.Printf("Failed to serve: %v", err)
+		return err
+	}
+
+	return nil
 }
 
-// Stop gracefully shuts down the server
+// Stop gracefully shuts down the WorkerServer.
 func (w *WorkerServer) Stop() error {
-	// Gracefully stop the server
-	w.workerServer.GracefulStop()
+	if w.grpcServer != nil {
+		w.grpcServer.GracefulStop()
+	}
 
-	// Close the listener
-	if err := w.listener.Close(); err != nil {
-		log.Printf("failed to close the listener: %v", err)
-		return err
+	if w.listener != nil {
+		if err := w.listener.Close(); err != nil {
+			log.Printf("Failed to close the listener: %v", err)
+			return err
+		}
 	}
 
 	log.Println("Worker server stopped")
 	return nil
 }
 
-func NewServer() *WorkerServer {
-	return &WorkerServer{}
+// SubmitTask handles the submission of a task to the worker server.
+func (s *WorkerServer) SubmitTask(ctx context.Context, req *pb.TaskRequest) (*pb.TaskResponse, error) {
+	log.Printf("Received task: %s", req.GetData())
+	go processTask(req.GetData())
+
+	return &pb.TaskResponse{
+		Message: "Task was submitted",
+		Success: true,
+		TaskId:  req.TaskId,
+	}, nil
+}
+
+// processTask simulates task processing.
+func processTask(data string) {
+	log.Printf("Starting task: %s", data)
+	time.Sleep(5 * time.Second) // Simulating task processing time
+	log.Printf("Completed task: %s", data)
 }

@@ -22,3 +22,17 @@ message TaskResponse {
   string message = 2;
   bool success = 3;
 }
+
+service CoordinatorService {
+  // Sends a heartbeat to the server
+  rpc SendHeartbeat (HeartbeatRequest) returns (HeartbeatResponse) {}
+}
+
+message HeartbeatRequest {
+  string workerId = 1;
+  string address = 2;
+}
+
+message HeartbeatResponse {
+  bool acknowledged = 1;
+}
