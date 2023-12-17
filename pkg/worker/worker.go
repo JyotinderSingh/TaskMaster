@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-type workerServer struct {
+type WorkerServer struct {
 	listener     net.Listener
 	workerServer *grpc.Server
 }
@@ -19,11 +19,11 @@ type workerServiceServer struct {
 	pb.UnimplementedWorkerServiceServer
 }
 
-func (s *workerServiceServer) SendTask(ctx context.Context, in *pb.TaskRequest) (*pb.TaskResponse, error) {
+func (s *workerServiceServer) SubmitTask(ctx context.Context, in *pb.TaskRequest) (*pb.TaskResponse, error) {
 	log.Printf("Received: %v", in.GetData())
 	// Process the task asynchronously
-	processTask(in.GetData())
-	return &pb.TaskResponse{Result: "Task processed"}, nil
+	go processTask(in.GetData())
+	return &pb.TaskResponse{Message: "Task was submitted", Success: true, TaskId: in.TaskId}, nil
 }
 
 func processTask(data string) {
@@ -33,21 +33,40 @@ func processTask(data string) {
 	log.Println("Completed Task", data)
 }
 
-func (w *workerServer) Start() {
+func (w *WorkerServer) Start() error {
 	PORT := ":50051"
 	lis, err := net.Listen("tcp", PORT)
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		log.Printf("failed to listen: %v", err)
+		return err // Return the error instead of logging fatal
 	}
 	log.Println("Started worker server at", PORT)
 	w.listener = lis
 	w.workerServer = grpc.NewServer()
 	pb.RegisterWorkerServiceServer(w.workerServer, &workerServiceServer{})
 	if err := w.workerServer.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+		log.Printf("failed to serve: %v", err)
+		return err // Return the error instead of logging fatal
 	}
+
+	return nil // Return nil if no errors occurred
 }
 
-func NewServer() workerServer {
-	return workerServer{}
+// Stop gracefully shuts down the server
+func (w *WorkerServer) Stop() error {
+	// Gracefully stop the server
+	w.workerServer.GracefulStop()
+
+	// Close the listener
+	if err := w.listener.Close(); err != nil {
+		log.Printf("failed to close the listener: %v", err)
+		return err
+	}
+
+	log.Println("Worker server stopped")
+	return nil
+}
+
+func NewServer() *WorkerServer {
+	return &WorkerServer{}
 }
