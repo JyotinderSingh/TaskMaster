@@ -29,7 +29,7 @@ service CoordinatorService {
 }
 
 message HeartbeatRequest {
-  string workerId = 1;
+  uint32 workerId = 1;
   string address = 2;
 }
 
