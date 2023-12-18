@@ -14,16 +14,17 @@ import (
 )
 
 const (
-	serverPort       = ":50051"
 	coordinatorAddr  = "localhost:50050"
 	defaultHeartbeat = 5 * time.Second
 	taskProcessTime  = 5 * time.Second
 )
 
 // WorkerServer represents a gRPC server for handling worker tasks.
+// WorkerServer represents a gRPC server for handling worker tasks.
 type WorkerServer struct {
 	pb.UnimplementedWorkerServiceServer
 	id                       uint32
+	serverPort               string
 	listener                 net.Listener
 	grpcServer               *grpc.Server
 	coordinatorServiceClient pb.CoordinatorServiceClient
@@ -31,9 +32,10 @@ type WorkerServer struct {
 }
 
 // NewServer creates and returns a new WorkerServer.
-func NewServer() *WorkerServer {
+func NewServer(port string) *WorkerServer {
 	return &WorkerServer{
 		id:                uuid.New().ID(),
+		serverPort:        port,
 		heartbeatInterval: defaultHeartbeat,
 	}
 }
@@ -84,12 +86,12 @@ func (w *WorkerServer) sendHeartbeat() error {
 
 func (w *WorkerServer) startGRPCServer() error {
 	var err error
-	w.listener, err = net.Listen("tcp", serverPort)
+	w.listener, err = net.Listen("tcp", w.serverPort)
 	if err != nil {
-		return fmt.Errorf("failed to listen on %s: %w", serverPort, err)
+		return fmt.Errorf("failed to listen on %s: %w", w.serverPort, err)
 	}
 
-	log.Printf("Starting worker server on %s\n", serverPort)
+	log.Printf("Starting worker server on %s\n", w.serverPort)
 	w.grpcServer = grpc.NewServer()
 	pb.RegisterWorkerServiceServer(w.grpcServer, w)
 
