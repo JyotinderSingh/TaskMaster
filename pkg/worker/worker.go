@@ -17,6 +17,7 @@ const (
 	coordinatorAddr  = "localhost:50050"
 	defaultHeartbeat = 5 * time.Second
 	taskProcessTime  = 5 * time.Second
+	workerPoolSize   = 10 // Number of workers in the pool
 )
 
 // WorkerServer represents a gRPC server for handling worker tasks.
@@ -29,6 +30,7 @@ type WorkerServer struct {
 	grpcServer               *grpc.Server
 	coordinatorServiceClient pb.CoordinatorServiceClient
 	heartbeatInterval        time.Duration
+	taskQueue                chan *pb.TaskRequest
 }
 
 // NewServer creates and returns a new WorkerServer.
@@ -37,11 +39,14 @@ func NewServer(port string) *WorkerServer {
 		id:                uuid.New().ID(),
 		serverPort:        port,
 		heartbeatInterval: defaultHeartbeat,
+		taskQueue:         make(chan *pb.TaskRequest, 100), // Buffered channel
 	}
 }
 
 // Start initializes and starts the WorkerServer.
 func (w *WorkerServer) Start() error {
+	w.startWorkerPool(workerPoolSize)
+
 	if err := w.connectToCoordinator(); err != nil {
 		return fmt.Errorf("failed to connect to coordinator: %w", err)
 	}
@@ -130,6 +135,20 @@ func (w *WorkerServer) SubmitTask(ctx context.Context, req *pb.TaskRequest) (*pb
 		Success: true,
 		TaskId:  req.TaskId,
 	}, nil
+}
+
+// startWorkerPool starts a pool of worker goroutines.
+func (w *WorkerServer) startWorkerPool(numWorkers int) {
+	for i := 0; i < numWorkers; i++ {
+		go w.worker()
+	}
+}
+
+// worker is the function run by each worker goroutine.
+func (w *WorkerServer) worker() {
+	for task := range w.taskQueue {
+		processTask(task.GetData())
+	}
 }
 
 // processTask simulates task processing.
