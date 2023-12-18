@@ -16,7 +16,8 @@ import (
 )
 
 var s *server.CoordinatorServer
-var w *worker.WorkerServer
+var w1 *worker.WorkerServer
+var w2 *worker.WorkerServer
 
 func TestMain(m *testing.M) {
 	setup()
@@ -27,28 +28,39 @@ func TestMain(m *testing.M) {
 
 func setup() {
 	s = server.NewServer()
-	w = worker.NewServer()
+	w1 = worker.NewServer(":50051")
+	w2 = worker.NewServer(":50052")
 
 	go func() {
 		if err := s.Start(); err != nil {
-			log.Fatalf("Failed to start server: %v", err)
+			log.Fatalf("Failed to start server : %v", err)
 		}
 	}()
 
 	go func() {
-		if err := w.Start(); err != nil {
+		if err := w1.Start(); err != nil {
 			log.Fatalf("Failed to start worker: %v", err)
 		}
 	}()
 
-	time.Sleep(2 * time.Second)
+	go func() {
+		if err := w2.Start(); err != nil {
+			log.Fatalf("Failed to start worker: %v", err)
+		}
+	}()
+
+	time.Sleep(10 * time.Second)
 }
 
 func teardown() {
 	if err := s.Stop(); err != nil {
 		log.Printf("Failed to stop server: %v", err)
 	}
-	if err := w.Stop(); err != nil {
+	if err := w1.Stop(); err != nil {
+		log.Printf("Failed to stop worker: %v", err)
+	}
+
+	if err := w2.Stop(); err != nil {
 		log.Printf("Failed to stop worker: %v", err)
 	}
 }
@@ -65,5 +77,5 @@ func TestServerIntegration(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	assertion.NoError(err, "Failed to read response body")
 
-	assertion.Equal("Task submitted", string(body), "Unexpected message in response body")
+	assertion.Equal("Task submitted successfully\n", string(body), "Unexpected message in response body")
 }
