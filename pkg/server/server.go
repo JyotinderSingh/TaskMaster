@@ -22,12 +22,11 @@ import (
 )
 
 const (
-	serverPort        = ":50050"
-	httpServerPort    = ":8080"
-	grpcServerAddress = "localhost:50051"
-	shutdownTimeout   = 5 * time.Second
-	defaultMaxMisses  = 2
-	defaultHeartbeat  = 5
+	serverPort       = ":50050"
+	httpServerPort   = ":8080"
+	shutdownTimeout  = 5 * time.Second
+	defaultMaxMisses = 2
+	defaultHeartbeat = 5
 )
 
 type CoordinatorServer struct {
@@ -209,7 +208,7 @@ func (s *CoordinatorServer) SendHeartbeat(ctx context.Context, in *pb.HeartbeatR
 		worker.heartbeatMisses = 0
 	} else {
 		log.Println("Registering worker:", workerID)
-		conn, err := grpc.Dial(grpcServerAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+		conn, err := grpc.Dial(in.GetAddress(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 		if err != nil {
 			return nil, err
 		}

@@ -77,7 +77,7 @@ func (w *WorkerServer) periodicHeartbeat() {
 func (w *WorkerServer) sendHeartbeat() error {
 	_, err := w.coordinatorServiceClient.SendHeartbeat(context.Background(), &pb.HeartbeatRequest{
 		WorkerId: w.id,
-		Address:  serverPort,
+		Address:  w.listener.Addr().String(),
 	})
 	return err
 }
