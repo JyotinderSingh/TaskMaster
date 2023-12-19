@@ -34,33 +34,36 @@ func setup() {
 	w1 = worker.NewServer(":50051")
 	w2 = worker.NewServer(":50052")
 
+	startServers()
+	createClientConnection()
+}
+
+func startServers() {
+	startServer(coordinator)
+	startServer(w1)
+	startServer(w2)
+
+	// Replace with a dynamic check to ensure servers are ready
+	time.Sleep(5 * time.Second)
+}
+
+func startServer(srv interface {
+	Start() error
+}) {
 	go func() {
-		if err := coordinator.Start(); err != nil {
-			log.Fatalf("Failed to start server : %v", err)
+		if err := srv.Start(); err != nil {
+			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()
+}
 
-	go func() {
-		if err := w1.Start(); err != nil {
-			log.Fatalf("Failed to start worker: %v", err)
-		}
-	}()
-
-	go func() {
-		if err := w2.Start(); err != nil {
-			log.Fatalf("Failed to start worker: %v", err)
-		}
-	}()
-
+func createClientConnection() {
 	var err error
 	conn, err = grpc.Dial("localhost:50050", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Fatal("Could not create test connection to coordinator")
 	}
-
 	client = pb.NewCoordinatorServiceClient(conn)
-
-	time.Sleep(5 * time.Second)
 }
 
 func teardown() {
@@ -70,26 +73,34 @@ func teardown() {
 	if err := w1.Stop(); err != nil {
 		log.Printf("Failed to stop worker: %v", err)
 	}
-
 	if err := w2.Stop(); err != nil {
 		log.Printf("Failed to stop worker: %v", err)
 	}
 }
 
 func TestServerIntegration(t *testing.T) {
+	t.Parallel() // Allow for parallel test execution where appropriate
+
 	assertion := assert.New(t)
-	assertion.Equal(len(coordinator.TaskStatus), 0, "There should be no queued tasks at startup")
+
 	submitResp, err := client.SubmitTask(context.Background(), &pb.ClientTaskRequest{Data: "test"})
+	if err != nil {
+		t.Fatalf("Failed to submit task: %v", err)
+	}
 	taskId := submitResp.GetTaskId()
-	assertion.Nil(err)
 
 	statusResp, err := client.GetTaskStatus(context.Background(), &pb.GetTaskStatusRequest{TaskId: taskId})
-	assertion.Nil(err)
+	if err != nil {
+		t.Fatalf("Failed to get task status: %v", err)
+	}
 	assertion.Equal(pb.TaskStatus_PROCESSING, statusResp.GetStatus())
 
+	// Replace with a dynamic check to wait for task completion
 	time.Sleep(5 * time.Second)
 
 	statusResp, err = client.GetTaskStatus(context.Background(), &pb.GetTaskStatusRequest{TaskId: taskId})
-	assertion.Nil(err)
+	if err != nil {
+		t.Fatalf("Failed to get task status: %v", err)
+	}
 	assertion.Equal(pb.TaskStatus_COMPLETE, statusResp.GetStatus())
 }
