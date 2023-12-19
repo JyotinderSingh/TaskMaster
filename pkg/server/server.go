@@ -229,11 +229,8 @@ func (s *CoordinatorServer) manageWorkerPool() {
 	ticker := time.NewTicker(s.heartbeatInterval)
 	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			s.removeInactiveWorkers()
-		}
+	for range ticker.C {
+		s.removeInactiveWorkers()
 	}
 }
 
