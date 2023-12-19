@@ -4,6 +4,13 @@ package grpcapi;
 
 option go_package = "github.com/JyotinderSingh/task-queue/pkg/grpcapi";
 
+enum TaskStatus {
+  QUEUED = 0;
+	PROCESSING = 1;
+	COMPLETE = 2;
+	FAILED = 3;
+}
+
 // The worker service definition.
 service WorkerService {
   // Sends a task to the worker
@@ -24,8 +31,32 @@ message TaskResponse {
 }
 
 service CoordinatorService {
+  // Sends a task request to the coordinator.
+  rpc SubmitTask (ClientTaskRequest) returns (ClientTaskResponse) {}
   // Sends a heartbeat to the server
   rpc SendHeartbeat (HeartbeatRequest) returns (HeartbeatResponse) {}
+  // Updates a Task Status
+  rpc UpdateTaskStatus (UpdateTaskStatusRequest) returns (UpdateTaskStatusResponse){}
+  // Retrieves a task's status.
+  rpc GetTaskStatus (GetTaskStatusRequest) returns (GetTaskStatusResponse) {}
+}
+
+message GetTaskStatusRequest {
+  string task_id = 1;
+}
+
+message GetTaskStatusResponse {
+  string task_id = 1;
+  TaskStatus status = 2;
+}
+
+message ClientTaskRequest {
+  string data = 1;
+}
+
+message ClientTaskResponse {
+  string message = 2;
+  string task_id = 3;
 }
 
 message HeartbeatRequest {
@@ -35,4 +66,13 @@ message HeartbeatRequest {
 
 message HeartbeatResponse {
   bool acknowledged = 1;
+}
+
+message UpdateTaskStatusRequest {
+  string task_id = 1;
+  TaskStatus status = 2;
+}
+
+message UpdateTaskStatusResponse {
+  bool success = 1;
 }

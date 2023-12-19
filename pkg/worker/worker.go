@@ -17,7 +17,7 @@ import (
 const (
 	coordinatorAddr = "localhost:50050"
 	taskProcessTime = 5 * time.Second
-	workerPoolSize  = 10 // Number of workers in the pool
+	workerPoolSize  = 5 // Number of workers in the pool
 )
 
 // WorkerServer represents a gRPC server for handling worker tasks.
@@ -127,8 +127,9 @@ func (w *WorkerServer) closeGRPCConnection() {
 
 // SubmitTask handles the submission of a task to the worker server.
 func (w *WorkerServer) SubmitTask(ctx context.Context, req *pb.TaskRequest) (*pb.TaskResponse, error) {
-	log.Printf("Received task: %s", req.GetData())
-	go processTask(req.GetData())
+	log.Printf("Received task: %+v", req)
+
+	w.taskQueue <- req
 
 	return &pb.TaskResponse{
 		Message: "Task was submitted",
@@ -147,13 +148,23 @@ func (w *WorkerServer) startWorkerPool(numWorkers int) {
 // worker is the function run by each worker goroutine.
 func (w *WorkerServer) worker() {
 	for task := range w.taskQueue {
-		processTask(task.GetData())
+		w.coordinatorServiceClient.UpdateTaskStatus(context.Background(),
+			&pb.UpdateTaskStatusRequest{
+				TaskId: task.GetTaskId(),
+				Status: pb.TaskStatus_PROCESSING,
+			})
+		w.processTask(task)
 	}
 }
 
 // processTask simulates task processing.
-func processTask(data string) {
-	log.Printf("Processing task: %s", data)
+func (w *WorkerServer) processTask(task *pb.TaskRequest) {
+	log.Printf("Processing task: %+v", task)
 	time.Sleep(taskProcessTime)
-	log.Printf("Completed task: %s", data)
+	log.Printf("Completed task: %+v", task)
+	w.coordinatorServiceClient.UpdateTaskStatus(context.Background(),
+		&pb.UpdateTaskStatusRequest{
+			TaskId: task.GetTaskId(),
+			Status: pb.TaskStatus_COMPLETE,
+		})
 }
