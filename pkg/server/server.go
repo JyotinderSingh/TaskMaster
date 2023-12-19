@@ -19,6 +19,8 @@ import (
 
 	pb "github.com/JyotinderSingh/task-queue/pkg/grpcapi"
 	"github.com/google/uuid"
+
+	"github.com/JyotinderSingh/task-queue/pkg/common"
 )
 
 const (
@@ -26,7 +28,6 @@ const (
 	httpServerPort   = ":8080"
 	shutdownTimeout  = 5 * time.Second
 	defaultMaxMisses = 2
-	defaultHeartbeat = 5
 )
 
 type CoordinatorServer struct {
@@ -37,7 +38,7 @@ type CoordinatorServer struct {
 	workerPool         map[uint32]*workerInfo
 	mutex              sync.RWMutex
 	maxHeartbeatMisses uint8
-	heartbeatInterval  uint8
+	heartbeatInterval  time.Duration
 	roundRobinIndex    uint32
 }
 
@@ -53,7 +54,7 @@ func NewServer() *CoordinatorServer {
 	return &CoordinatorServer{
 		workerPool:         make(map[uint32]*workerInfo),
 		maxHeartbeatMisses: defaultMaxMisses,
-		heartbeatInterval:  defaultHeartbeat,
+		heartbeatInterval:  common.DefaultHeartbeat,
 	}
 }
 
@@ -225,7 +226,7 @@ func (s *CoordinatorServer) SendHeartbeat(ctx context.Context, in *pb.HeartbeatR
 }
 
 func (s *CoordinatorServer) manageWorkerPool() {
-	ticker := time.NewTicker(time.Duration(s.heartbeatInterval) * time.Second)
+	ticker := time.NewTicker(s.heartbeatInterval)
 	defer ticker.Stop()
 
 	for {

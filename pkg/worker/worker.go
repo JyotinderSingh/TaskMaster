@@ -7,6 +7,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/JyotinderSingh/task-queue/pkg/common"
 	pb "github.com/JyotinderSingh/task-queue/pkg/grpcapi"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -14,10 +15,9 @@ import (
 )
 
 const (
-	coordinatorAddr  = "localhost:50050"
-	defaultHeartbeat = 5 * time.Second
-	taskProcessTime  = 5 * time.Second
-	workerPoolSize   = 10 // Number of workers in the pool
+	coordinatorAddr = "localhost:50050"
+	taskProcessTime = 5 * time.Second
+	workerPoolSize  = 10 // Number of workers in the pool
 )
 
 // WorkerServer represents a gRPC server for handling worker tasks.
@@ -38,7 +38,7 @@ func NewServer(port string) *WorkerServer {
 	return &WorkerServer{
 		id:                uuid.New().ID(),
 		serverPort:        port,
-		heartbeatInterval: defaultHeartbeat,
+		heartbeatInterval: common.DefaultHeartbeat,
 		taskQueue:         make(chan *pb.TaskRequest, 100), // Buffered channel
 	}
 }
