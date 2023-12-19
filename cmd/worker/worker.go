@@ -1,15 +1,19 @@
 package main
 
 import (
+	"flag"
+
 	"github.com/JyotinderSingh/task-queue/pkg/worker"
-	// other necessary imports
+)
+
+var (
+	serverPort      = flag.String("worker_port", ":50051", "Port on which the Worker serves requests.")
+	coordinatorPort = flag.String("coordinator", ":50050", "Network address of the Coordinator.")
 )
 
 func main() {
-	// Initialize configuration
-	// Set up logging, database connections, etc.
+	flag.Parse()
 
-	workerServer := worker.NewServer(":50051") // Create a new server instance
-	workerServer.Start()
-	// Handle graceful shutdown
+	worker := worker.NewServer(*serverPort, *coordinatorPort)
+	worker.Start()
 }

@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	coordinatorAddr = "localhost:50050"
 	taskProcessTime = 5 * time.Second
 	workerPoolSize  = 5 // Number of workers in the pool
 )
@@ -26,6 +25,7 @@ type WorkerServer struct {
 	pb.UnimplementedWorkerServiceServer
 	id                       uint32
 	serverPort               string
+	coordinatorAddress       string
 	listener                 net.Listener
 	grpcServer               *grpc.Server
 	coordinatorServiceClient pb.CoordinatorServiceClient
@@ -34,12 +34,13 @@ type WorkerServer struct {
 }
 
 // NewServer creates and returns a new WorkerServer.
-func NewServer(port string) *WorkerServer {
+func NewServer(port string, coordinator string) *WorkerServer {
 	return &WorkerServer{
-		id:                uuid.New().ID(),
-		serverPort:        port,
-		heartbeatInterval: common.DefaultHeartbeat,
-		taskQueue:         make(chan *pb.TaskRequest, 100), // Buffered channel
+		id:                 uuid.New().ID(),
+		serverPort:         port,
+		coordinatorAddress: coordinator,
+		heartbeatInterval:  common.DefaultHeartbeat,
+		taskQueue:          make(chan *pb.TaskRequest, 100), // Buffered channel
 	}
 }
 
@@ -59,7 +60,7 @@ func (w *WorkerServer) Start() error {
 
 func (w *WorkerServer) connectToCoordinator() error {
 	log.Println("Connecting to coordinator...")
-	conn, err := grpc.Dial(coordinatorAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.Dial(w.coordinatorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		return err
 	}
