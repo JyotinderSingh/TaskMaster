@@ -244,8 +244,8 @@ func (s *CoordinatorServer) removeInactiveWorkers() {
 	for workerID, worker := range s.workerPool {
 		if worker.heartbeatMisses > s.maxHeartbeatMisses {
 			log.Printf("Removing inactive worker: %d\n", workerID)
-			delete(s.workerPool, workerID)
 			worker.grpcConnection.Close()
+			delete(s.workerPool, workerID)
 		} else {
 			worker.heartbeatMisses++
 		}
