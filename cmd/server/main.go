@@ -11,7 +11,7 @@ func main() {
 	// Initialize configuration
 	// Set up logging, database connections, etc.
 
-	srv := server.NewServer() // Create a new server instance
+	srv := server.NewServer(":50050") // Create a new server instance
 	fmt.Println("Starting server")
 	srv.Start() // Start the server
 }

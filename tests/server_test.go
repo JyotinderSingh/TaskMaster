@@ -30,7 +30,7 @@ func TestMain(m *testing.M) {
 }
 
 func setup() {
-	coordinator = server.NewServer()
+	coordinator = server.NewServer(":50050")
 	w1 = worker.NewServer(":50051")
 	w2 = worker.NewServer(":50052")
 
@@ -44,7 +44,7 @@ func startServers() {
 	startServer(w2)
 
 	// Replace with a dynamic check to ensure servers are ready
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 }
 
 func startServer(srv interface {
@@ -96,7 +96,7 @@ func TestServerIntegration(t *testing.T) {
 	assertion.Equal(pb.TaskStatus_PROCESSING, statusResp.GetStatus())
 
 	// Replace with a dynamic check to wait for task completion
-	time.Sleep(5 * time.Second)
+	time.Sleep(7 * time.Second)
 
 	statusResp, err = client.GetTaskStatus(context.Background(), &pb.GetTaskStatusRequest{TaskId: taskId})
 	if err != nil {

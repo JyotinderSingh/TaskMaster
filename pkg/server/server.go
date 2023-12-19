@@ -22,13 +22,13 @@ import (
 )
 
 const (
-	serverPort       = ":50050"
 	shutdownTimeout  = 5 * time.Second
 	defaultMaxMisses = 2
 )
 
 type CoordinatorServer struct {
 	pb.UnimplementedCoordinatorServiceServer
+	serverPort         string
 	listener           net.Listener
 	grpcServer         *grpc.Server
 	workerPool         map[uint32]*workerInfo
@@ -48,12 +48,13 @@ type workerInfo struct {
 }
 
 // NewServer initializes and returns a new Server instance.
-func NewServer() *CoordinatorServer {
+func NewServer(port string) *CoordinatorServer {
 	return &CoordinatorServer{
 		workerPool:         make(map[uint32]*workerInfo),
 		TaskStatus:         make(map[string]pb.TaskStatus),
 		maxHeartbeatMisses: defaultMaxMisses,
 		heartbeatInterval:  common.DefaultHeartbeat,
+		serverPort:         port,
 	}
 }
 
@@ -70,12 +71,12 @@ func (s *CoordinatorServer) Start() error {
 
 func (s *CoordinatorServer) startGRPCServer() error {
 	var err error
-	s.listener, err = net.Listen("tcp", serverPort)
+	s.listener, err = net.Listen("tcp", s.serverPort)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("Starting gRPC server on %s\n", serverPort)
+	log.Printf("Starting gRPC server on %s\n", s.serverPort)
 	s.grpcServer = grpc.NewServer()
 	pb.RegisterCoordinatorServiceServer(s.grpcServer, s)
 
