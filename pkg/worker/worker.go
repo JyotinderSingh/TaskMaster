@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"time"
 
 	"github.com/JyotinderSingh/task-queue/pkg/common"
@@ -83,16 +84,30 @@ func (w *WorkerServer) periodicHeartbeat() {
 }
 
 func (w *WorkerServer) sendHeartbeat() error {
+	workerAddress := os.Getenv("WORKER_ADDRESS")
+	if workerAddress == "" {
+		// Fall back to using the listener address if WORKER_ADDRESS is not set
+		workerAddress = w.listener.Addr().String()
+	}
+
 	_, err := w.coordinatorServiceClient.SendHeartbeat(context.Background(), &pb.HeartbeatRequest{
 		WorkerId: w.id,
-		Address:  w.listener.Addr().String(),
+		Address:  workerAddress + w.serverPort,
 	})
 	return err
 }
 
 func (w *WorkerServer) startGRPCServer() error {
 	var err error
-	w.listener, err = net.Listen("tcp", w.serverPort)
+
+	if w.serverPort == "" {
+		// Find a free port using a temporary socket
+		w.listener, err = net.Listen("tcp", ":0")                                // Bind to any available port
+		w.serverPort = fmt.Sprintf(":%d", w.listener.Addr().(*net.TCPAddr).Port) // Get the assigned port
+	} else {
+		w.listener, err = net.Listen("tcp", w.serverPort)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s: %w", w.serverPort, err)
 	}

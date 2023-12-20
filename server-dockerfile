@@ -1,0 +1,24 @@
+# Use an official Go runtime as a parent image
+FROM golang:1.19
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy the go.mod and go.sum files first to leverage Docker cache
+COPY go.mod go.sum ./
+
+# Download all dependencies
+RUN go mod download
+
+# Copy the local package files to the container's workspace.
+COPY pkg/ ./pkg/
+COPY cmd/server/main.go .
+
+# Build the server application
+RUN go build -o server main.go
+
+# Expose port 8080 to the outside world
+EXPOSE 8080
+
+# Run the server when the container launches
+CMD ["./server", "--server_port=:8080"]
