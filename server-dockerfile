@@ -21,4 +21,4 @@ RUN go build -o server main.go
 EXPOSE 8080
 
 # Run the server when the container launches
-CMD ["./server", "--server_port=:8080"]
+CMD ./server --server_port=:8080

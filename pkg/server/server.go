@@ -199,7 +199,7 @@ func (s *CoordinatorServer) SendHeartbeat(ctx context.Context, in *pb.HeartbeatR
 
 	workerID := in.GetWorkerId()
 
-	log.Println("Received heartbeat from worker:", workerID)
+	// log.Println("Received heartbeat from worker:", workerID)
 	if worker, ok := s.workerPool[workerID]; ok {
 		worker.heartbeatMisses = 0
 	} else {
