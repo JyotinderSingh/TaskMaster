@@ -1,6 +1,16 @@
 # Use an official Go runtime as a parent image
 FROM golang:1.19
 
+# Install Protobuf compiler and Go-related packages
+RUN apt-get update && apt-get install -y \
+    protobuf-compiler \
+    golang-go \
+    git
+
+# Install the protoc-gen-go and protoc-gen-go-grpc plugins
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
 # Set the working directory in the container
 WORKDIR /app
 
@@ -13,6 +23,8 @@ RUN go mod download
 # Copy the local package files to the container's workspace.
 COPY pkg/ ./pkg/
 COPY cmd/worker/main.go .
+
+RUN ./pkg/grpcapi/build.sh
 
 # Build the worker application
 RUN go build -o worker main.go
