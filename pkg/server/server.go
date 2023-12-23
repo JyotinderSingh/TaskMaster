@@ -99,13 +99,13 @@ func (s *CoordinatorServer) awaitShutdown() error {
 
 // Stop gracefully shuts down the server.
 func (s *CoordinatorServer) Stop() error {
-	s.WorkerPoolMutex.Lock()
+	s.WorkerPoolMutex.RLock()
+	defer s.WorkerPoolMutex.RUnlock()
 	for _, worker := range s.WorkerPool {
 		if worker.grpcConnection != nil {
 			worker.grpcConnection.Close()
 		}
 	}
-	s.WorkerPoolMutex.Unlock()
 
 	if s.grpcServer != nil {
 		s.grpcServer.GracefulStop()
@@ -204,7 +204,7 @@ func (s *CoordinatorServer) SendHeartbeat(ctx context.Context, in *pb.HeartbeatR
 		worker.heartbeatMisses = 0
 	} else {
 		log.Println("Registering worker:", workerID)
-		conn, err := grpc.Dial(in.GetAddress(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+		conn, err := grpc.Dial(in.GetAddress(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			return nil, err
 		}

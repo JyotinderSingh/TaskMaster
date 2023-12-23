@@ -37,13 +37,13 @@ func (c *Cluster) LaunchCluster(coordinatorPort string, numWorkers int8) {
 }
 
 func (c *Cluster) StopCluster() {
-	if err := c.coordinator.Stop(); err != nil {
-		log.Printf("Failed to stop server: %v", err)
-	}
 	for _, worker := range c.workers {
 		if err := worker.Stop(); err != nil {
 			log.Printf("Failed to stop worker: %v", err)
 		}
+	}
+	if err := c.coordinator.Stop(); err != nil {
+		log.Printf("Failed to stop server: %v", err)
 	}
 
 }
@@ -61,7 +61,7 @@ func startServer(srv interface {
 func (c *Cluster) waitForWorkers() {
 	for {
 		c.coordinator.WorkerPoolMutex.RLock()
-		if len(c.coordinator.WorkerPool) == 2 {
+		if len(c.coordinator.WorkerPool) == len(c.workers) {
 			break
 		}
 		c.coordinator.WorkerPoolMutex.RUnlock()
