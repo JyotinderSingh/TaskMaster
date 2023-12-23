@@ -38,6 +38,9 @@ type CoordinatorServer struct {
 	roundRobinIndex    uint32
 	TaskStatus         map[string]pb.TaskStatus
 	taskStatusMutex    sync.RWMutex
+	ctx                context.Context    // The root context for all goroutines
+	cancel             context.CancelFunc // Function to cancel the context
+	wg                 sync.WaitGroup     // WaitGroup to wait for all goroutines to finish
 }
 
 type workerInfo struct {
@@ -49,12 +52,15 @@ type workerInfo struct {
 
 // NewServer initializes and returns a new Server instance.
 func NewServer(port string) *CoordinatorServer {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &CoordinatorServer{
 		WorkerPool:         make(map[uint32]*workerInfo),
 		TaskStatus:         make(map[string]pb.TaskStatus),
 		maxHeartbeatMisses: defaultMaxMisses,
 		heartbeatInterval:  common.DefaultHeartbeat,
 		serverPort:         port,
+		ctx:                ctx,
+		cancel:             cancel,
 	}
 }
 
@@ -99,7 +105,11 @@ func (s *CoordinatorServer) awaitShutdown() error {
 
 // Stop gracefully shuts down the server.
 func (s *CoordinatorServer) Stop() error {
-	log.Printf("Called Stop on coordinator.")
+	// Signal all goroutines to stop
+	s.cancel()
+	// Wait for all goroutines to finish
+	s.wg.Wait()
+
 	s.WorkerPoolMutex.RLock()
 	defer s.WorkerPoolMutex.RUnlock()
 	for _, worker := range s.WorkerPool {
@@ -222,11 +232,19 @@ func (s *CoordinatorServer) SendHeartbeat(ctx context.Context, in *pb.HeartbeatR
 }
 
 func (s *CoordinatorServer) manageWorkerPool() {
+	s.wg.Add(1)
+	defer s.wg.Done()
+
 	ticker := time.NewTicker(time.Duration(s.maxHeartbeatMisses) * s.heartbeatInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		s.removeInactiveWorkers()
+	for {
+		select {
+		case <-ticker.C:
+			s.removeInactiveWorkers()
+		case <-s.ctx.Done():
+			return
+		}
 	}
 }
 
