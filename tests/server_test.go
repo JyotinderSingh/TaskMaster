@@ -7,18 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	pb "github.com/JyotinderSingh/task-queue/pkg/grpcapi"
-	"github.com/JyotinderSingh/task-queue/pkg/server"
-	"github.com/JyotinderSingh/task-queue/pkg/worker"
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
-var coordinator *server.CoordinatorServer
-var w1 *worker.WorkerServer
-var w2 *worker.WorkerServer
+var cluster Cluster
 var conn *grpc.ClientConn
 var client pb.CoordinatorServiceClient
 
@@ -30,52 +24,14 @@ func TestMain(m *testing.M) {
 }
 
 func setup() {
-	coordinator = server.NewServer(":50050")
-	w1 = worker.NewServer("", "localhost:50050")
-	w2 = worker.NewServer(":50052", "localhost:50050")
+	cluster = Cluster{}
+	cluster.LaunchCluster(":50050", 2)
 
-	startServers()
-	createClientConnection()
-}
-
-func startServers() {
-	startServer(coordinator)
-	startServer(w1)
-	startServer(w2)
-
-	// Replace with a dynamic check to ensure servers are ready
-	time.Sleep(10 * time.Second)
-}
-
-func startServer(srv interface {
-	Start() error
-}) {
-	go func() {
-		if err := srv.Start(); err != nil {
-			log.Fatalf("Failed to start server: %v", err)
-		}
-	}()
-}
-
-func createClientConnection() {
-	var err error
-	conn, err = grpc.Dial("localhost:50050", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
-	if err != nil {
-		log.Fatal("Could not create test connection to coordinator")
-	}
-	client = pb.NewCoordinatorServiceClient(conn)
+	conn, client = CreateTestClient("localhost:50050")
 }
 
 func teardown() {
-	if err := coordinator.Stop(); err != nil {
-		log.Printf("Failed to stop server: %v", err)
-	}
-	if err := w1.Stop(); err != nil {
-		log.Printf("Failed to stop worker: %v", err)
-	}
-	if err := w2.Stop(); err != nil {
-		log.Printf("Failed to stop worker: %v", err)
-	}
+	cluster.StopCluster()
 }
 
 func TestServerIntegration(t *testing.T) {
@@ -95,12 +51,15 @@ func TestServerIntegration(t *testing.T) {
 	}
 	assertion.Equal(pb.TaskStatus_PROCESSING, statusResp.GetStatus())
 
-	// Replace with a dynamic check to wait for task completion
-	time.Sleep(7 * time.Second)
+	err = WaitForCondition(func() bool {
+		statusResp, err = client.GetTaskStatus(context.Background(), &pb.GetTaskStatusRequest{TaskId: taskId})
+		if err != nil {
+			log.Fatalf("Failed to get task status: %v", err)
+		}
+		return statusResp.GetStatus() == pb.TaskStatus_COMPLETE
+	}, 10*time.Second)
 
-	statusResp, err = client.GetTaskStatus(context.Background(), &pb.GetTaskStatusRequest{TaskId: taskId})
 	if err != nil {
-		t.Fatalf("Failed to get task status: %v", err)
+		t.Fatalf("Task did not complete within the timeout: %v", err)
 	}
-	assertion.Equal(pb.TaskStatus_COMPLETE, statusResp.GetStatus())
 }
