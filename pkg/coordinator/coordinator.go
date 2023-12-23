@@ -114,7 +114,6 @@ func (s *CoordinatorServer) Stop() error {
 	if s.listener != nil {
 		return s.listener.Close()
 	}
-
 	return nil
 }
 
@@ -195,7 +194,7 @@ func (s *CoordinatorServer) submitTaskToWorker(task *pb.TaskRequest) error {
 
 func (s *CoordinatorServer) SendHeartbeat(ctx context.Context, in *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
 	s.WorkerPoolMutex.Lock()
-	defer s.WorkerPoolMutex.Unlock()
+defer s.WorkerPoolMutex.Unlock()
 
 	workerID := in.GetWorkerId()
 
@@ -216,12 +215,12 @@ func (s *CoordinatorServer) SendHeartbeat(ctx context.Context, in *pb.HeartbeatR
 		}
 		log.Println("Registered worker:", workerID)
 	}
-
+	
 	return &pb.HeartbeatResponse{Acknowledged: true}, nil
 }
 
 func (s *CoordinatorServer) manageWorkerPool() {
-	ticker := time.NewTicker(s.heartbeatInterval)
+	ticker := time.NewTicker(time.Duration(s.maxHeartbeatMisses) * s.heartbeatInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {

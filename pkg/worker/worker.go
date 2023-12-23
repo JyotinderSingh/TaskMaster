@@ -125,12 +125,6 @@ func (w *WorkerServer) startGRPCServer() error {
 func (w *WorkerServer) Stop() error {
 	w.closeGRPCConnection()
 
-	if w.listener != nil {
-		if err := w.listener.Close(); err != nil {
-			return fmt.Errorf("failed to close the listener: %w", err)
-		}
-	}
-
 	log.Println("Worker server stopped")
 	return nil
 }
