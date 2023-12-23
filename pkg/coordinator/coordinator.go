@@ -1,4 +1,4 @@
-package server
+package coordinator
 
 import (
 	"context"

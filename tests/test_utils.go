@@ -5,8 +5,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/JyotinderSingh/task-queue/pkg/coordinator"
 	pb "github.com/JyotinderSingh/task-queue/pkg/grpcapi"
-	"github.com/JyotinderSingh/task-queue/pkg/server"
 	"github.com/JyotinderSingh/task-queue/pkg/worker"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -14,13 +14,13 @@ import (
 
 type Cluster struct {
 	coordinatorAddress string
-	coordinator        *server.CoordinatorServer
+	coordinator        *coordinator.CoordinatorServer
 	workers            []*worker.WorkerServer
 }
 
 func (c *Cluster) LaunchCluster(coordinatorPort string, numWorkers int8) {
 	c.coordinatorAddress = "localhost" + coordinatorPort
-	c.coordinator = server.NewServer(coordinatorPort)
+	c.coordinator = coordinator.NewServer(coordinatorPort)
 
 	c.workers = make([]*worker.WorkerServer, numWorkers)
 

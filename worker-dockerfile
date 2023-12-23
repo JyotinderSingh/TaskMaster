@@ -33,4 +33,4 @@ RUN go build -o worker main.go
 EXPOSE 50056
 
 # Run the worker when the container launches
-CMD ["./worker", "--coordinator=server:8080"]
+CMD ["./worker", "--coordinator=coordinator:8080"]

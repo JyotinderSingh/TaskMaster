@@ -22,15 +22,15 @@ RUN go mod download
 
 # Copy the local package files to the container's workspace.
 COPY pkg/ ./pkg/
-COPY cmd/server/main.go .
+COPY cmd/coordinator/main.go .
 
 RUN ./pkg/grpcapi/build.sh
 
-# Build the server application
-RUN go build -o server main.go
+# Build the coordinator application
+RUN go build -o coordinator main.go
 
 # Expose port 8080 to the outside world
 EXPOSE 8080
 
-# Run the server when the container launches
-CMD ./server --server_port=:8080
+# Run the coordinator when the container launches
+CMD ./coordinator --coordinator_port=:8080
