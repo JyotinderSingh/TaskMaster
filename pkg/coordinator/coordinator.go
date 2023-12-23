@@ -195,14 +195,13 @@ func (s *CoordinatorServer) submitTaskToWorker(task *pb.TaskRequest) error {
 }
 
 func (s *CoordinatorServer) SendHeartbeat(ctx context.Context, in *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
-	log.Printf("Called SendHearbeat")
 	s.WorkerPoolMutex.Lock()
 	defer s.WorkerPoolMutex.Unlock()
 
 	workerID := in.GetWorkerId()
 
-	log.Println("Received heartbeat from worker:", workerID)
 	if worker, ok := s.WorkerPool[workerID]; ok {
+		log.Println("Reset hearbeat miss for worker:", workerID)
 		worker.heartbeatMisses = 0
 	} else {
 		log.Println("Registering worker:", workerID)

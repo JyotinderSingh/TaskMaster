@@ -60,13 +60,12 @@ func startServer(srv interface {
 
 func (c *Cluster) waitForWorkers() {
 	for {
-		// Note: This should ideally acquire the workerpool mutex before reading it,
-		// however, it interferes with the actual processing of the server -
-		// therefore as a compromise we perform unsafe access during these test
-		// cases.
+		c.coordinator.WorkerPoolMutex.RLock()
 		if len(c.coordinator.WorkerPool) == len(c.workers) {
+			c.coordinator.WorkerPoolMutex.RUnlock()
 			break
 		}
+		c.coordinator.WorkerPoolMutex.RUnlock()
 		time.Sleep(time.Second)
 	}
 }
