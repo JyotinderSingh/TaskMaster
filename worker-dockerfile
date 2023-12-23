@@ -29,8 +29,5 @@ RUN ./pkg/grpcapi/build.sh
 # Build the worker application
 RUN go build -o worker main.go
 
-# Expose port 50056 to the outside world
-EXPOSE 50056
-
 # Run the worker when the container launches
 CMD ["./worker", "--coordinator=coordinator:8080"]

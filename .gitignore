@@ -20,3 +20,10 @@
 
 # Go workspace file
 go.work
+
+# env
+.env
+env.bash
+
+# docker-compose volume
+data/

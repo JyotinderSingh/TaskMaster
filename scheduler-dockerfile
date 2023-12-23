@@ -22,12 +22,12 @@ RUN go mod download
 
 # Copy the local package files to the container's workspace.
 COPY pkg/ ./pkg/
-COPY cmd/coordinator/main.go .
+COPY cmd/scheduler/main.go .
 
 RUN ./pkg/grpcapi/build.sh
 
-# Build the coordinator application
-RUN go build -o coordinator main.go
+# Build the scheduler application
+RUN go build -o scheduler main.go
 
-# Run the coordinator when the container launches
-CMD ./coordinator --coordinator_port=:8080
+# Run the worker when the container launches
+CMD ["./scheduler", "--scheduler_port=:8081"]

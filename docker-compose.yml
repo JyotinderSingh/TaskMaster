@@ -1,17 +1,46 @@
 version: "3"
 services:
+  postgres:
+    build:
+      context: .
+      dockerfile: postgres-dockerfile
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: scheduler-dockerfile
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres
+
   coordinator:
     build:
       context: .
       dockerfile: coordinator-dockerfile
     ports:
       - "8080:8080"
+    depends_on:
+      - postgres
 
   worker:
     build:
       context: .
       dockerfile: worker-dockerfile
     environment:
-      - WORKER_ADDRESS=worker
+      WORKER_ADDRESS: worker
     depends_on:
       - coordinator
