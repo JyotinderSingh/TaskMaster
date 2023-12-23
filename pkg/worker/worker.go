@@ -21,7 +21,6 @@ const (
 )
 
 // WorkerServer represents a gRPC server for handling worker tasks.
-// WorkerServer represents a gRPC server for handling worker tasks.
 type WorkerServer struct {
 	pb.UnimplementedWorkerServiceServer
 	id                       uint32
@@ -95,7 +94,7 @@ func (w *WorkerServer) sendHeartbeat() error {
 		// Fall back to using the listener address if WORKER_ADDRESS is not set
 		workerAddress = w.listener.Addr().String()
 	} else {
-		workerAddress = workerAddress + w.serverPort
+		workerAddress += w.serverPort
 	}
 
 	_, err := w.coordinatorServiceClient.SendHeartbeat(context.Background(), &pb.HeartbeatRequest{
@@ -130,7 +129,6 @@ func (w *WorkerServer) startGRPCServer() error {
 // Stop gracefully shuts down the WorkerServer.
 func (w *WorkerServer) Stop() error {
 	w.closeGRPCConnection()
-
 	log.Println("Worker server stopped")
 	return nil
 }
