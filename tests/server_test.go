@@ -35,10 +35,9 @@ func teardown() {
 }
 
 func TestServerIntegration(t *testing.T) {
-	t.Parallel() // Allow for parallel test execution where appropriate
-
 	assertion := assert.New(t)
 
+	// time.Sleep(10 * time.Second)
 	submitResp, err := client.SubmitTask(context.Background(), &pb.ClientTaskRequest{Data: "test"})
 	if err != nil {
 		t.Fatalf("Failed to submit task: %v", err)

@@ -99,6 +99,7 @@ func (s *CoordinatorServer) awaitShutdown() error {
 
 // Stop gracefully shuts down the server.
 func (s *CoordinatorServer) Stop() error {
+	log.Printf("Called Stop on coordinator.")
 	s.WorkerPoolMutex.RLock()
 	defer s.WorkerPoolMutex.RUnlock()
 	for _, worker := range s.WorkerPool {
@@ -118,6 +119,7 @@ func (s *CoordinatorServer) Stop() error {
 }
 
 func (s *CoordinatorServer) SubmitTask(ctx context.Context, in *pb.ClientTaskRequest) (*pb.ClientTaskResponse, error) {
+	log.Printf("Called submit task")
 	data := in.GetData()
 	taskId := uuid.New().String()
 	task := &pb.TaskRequest{
@@ -193,12 +195,13 @@ func (s *CoordinatorServer) submitTaskToWorker(task *pb.TaskRequest) error {
 }
 
 func (s *CoordinatorServer) SendHeartbeat(ctx context.Context, in *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
+	log.Printf("Called SendHearbeat")
 	s.WorkerPoolMutex.Lock()
-defer s.WorkerPoolMutex.Unlock()
+	defer s.WorkerPoolMutex.Unlock()
 
 	workerID := in.GetWorkerId()
 
-	// log.Println("Received heartbeat from worker:", workerID)
+	log.Println("Received heartbeat from worker:", workerID)
 	if worker, ok := s.WorkerPool[workerID]; ok {
 		worker.heartbeatMisses = 0
 	} else {
@@ -215,7 +218,7 @@ defer s.WorkerPoolMutex.Unlock()
 		}
 		log.Println("Registered worker:", workerID)
 	}
-	
+
 	return &pb.HeartbeatResponse{Acknowledged: true}, nil
 }
 

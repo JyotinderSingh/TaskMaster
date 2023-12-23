@@ -47,14 +47,15 @@ func NewServer(port string, coordinator string) *WorkerServer {
 
 // Start initializes and starts the WorkerServer.
 func (w *WorkerServer) Start() error {
-	w.startWorkerPool(workerPoolSize)
+	ctx := context.Background()
+	w.startWorkerPool(ctx, workerPoolSize)
 
 	if err := w.connectToCoordinator(); err != nil {
 		return fmt.Errorf("failed to connect to coordinator: %w", err)
 	}
 	defer w.closeGRPCConnection()
 
-	go w.periodicHeartbeat()
+	go w.periodicHeartbeat(ctx)
 
 	return w.startGRPCServer()
 }
@@ -71,14 +72,19 @@ func (w *WorkerServer) connectToCoordinator() error {
 	return nil
 }
 
-func (w *WorkerServer) periodicHeartbeat() {
+func (w *WorkerServer) periodicHeartbeat(ctx context.Context) {
 	ticker := time.NewTicker(w.heartbeatInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		if err := w.sendHeartbeat(); err != nil {
-			log.Printf("Failed to send heartbeat: %v", err)
-			break
+	for {
+		select {
+		case <-ticker.C:
+			if err := w.sendHeartbeat(); err != nil {
+				log.Printf("Failed to send heartbeat: %v", err)
+				return
+			}
+		case <-ctx.Done():
+			return
 		}
 	}
 }
@@ -149,21 +155,26 @@ func (w *WorkerServer) SubmitTask(ctx context.Context, req *pb.TaskRequest) (*pb
 }
 
 // startWorkerPool starts a pool of worker goroutines.
-func (w *WorkerServer) startWorkerPool(numWorkers int) {
+func (w *WorkerServer) startWorkerPool(ctx context.Context, numWorkers int) {
 	for i := 0; i < numWorkers; i++ {
-		go w.worker()
+		go w.worker(ctx)
 	}
 }
 
 // worker is the function run by each worker goroutine.
-func (w *WorkerServer) worker() {
-	for task := range w.taskQueue {
-		w.coordinatorServiceClient.UpdateTaskStatus(context.Background(),
-			&pb.UpdateTaskStatusRequest{
-				TaskId: task.GetTaskId(),
-				Status: pb.TaskStatus_PROCESSING,
-			})
-		w.processTask(task)
+func (w *WorkerServer) worker(ctx context.Context) {
+	for {
+		select {
+		case task := <-w.taskQueue:
+			w.coordinatorServiceClient.UpdateTaskStatus(context.Background(),
+				&pb.UpdateTaskStatusRequest{
+					TaskId: task.GetTaskId(),
+					Status: pb.TaskStatus_PROCESSING,
+				})
+			w.processTask(task)
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
