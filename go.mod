@@ -57,6 +57,7 @@ require (
 require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/uuid v1.5.0
+	github.com/jackc/pgx v3.6.2+incompatible
 	github.com/jackc/pgx/v4 v4.18.1
 	github.com/stretchr/testify v1.8.4
 	github.com/testcontainers/testcontainers-go v0.27.0

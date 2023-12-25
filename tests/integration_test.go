@@ -33,7 +33,15 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestE2ESuccess(t *testing.T) {
+// func TestE2ESuccess(t *testing.T) {
+// 	setup(2)
+// 	defer teardown()
+
+// 	assertion = assert.New(t)
+
+// }
+
+func TestCoordinatorE2ESuccess_deprecated(t *testing.T) {
 	setup(2)
 	defer teardown()
 

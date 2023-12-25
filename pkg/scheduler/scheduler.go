@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/JyotinderSingh/task-queue/pkg/common"
+	"github.com/jackc/pgx/pgtype"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
@@ -22,8 +23,13 @@ type CommandRequest struct {
 }
 
 type Task struct {
+	Id          string
 	Command     string
-	ScheduledAt int64
+	ScheduledAt pgtype.Timestamp
+	PickedAt    pgtype.Timestamp
+	StartedAt   pgtype.Timestamp
+	CompletedAt pgtype.Timestamp
+	FailedAt    pgtype.Timestamp
 }
 
 // SchedulerServer represents an HTTP server that manages tasks.
@@ -55,7 +61,9 @@ func (s *SchedulerServer) Start() error {
 		return err
 	}
 
-	http.HandleFunc("/schedule", s.handlePostTask)
+	http.HandleFunc("/schedule", s.handleScheduleTask)
+	http.HandleFunc("/status/", s.handleGetTaskStatus) // Add the new route handler
+
 	s.httpServer = &http.Server{
 		Addr: s.serverPort,
 	}
@@ -73,8 +81,8 @@ func (s *SchedulerServer) Start() error {
 	return s.awaitShutdown()
 }
 
-// handlePostTask handles POST requests to add new tasks.
-func (s *SchedulerServer) handlePostTask(w http.ResponseWriter, r *http.Request) {
+// handleScheduleTask handles POST requests to add new tasks.
+func (s *SchedulerServer) handleScheduleTask(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "POST" {
 		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
@@ -98,9 +106,9 @@ func (s *SchedulerServer) handlePostTask(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Convert the scheduled time to Unix timestamp
-	unixTimestamp := scheduledTime.Unix()
+	unixTimestamp := time.Unix(scheduledTime.Unix(), 0)
 
-	taskId, err := s.insertTaskIntoDB(context.Background(), Task{Command: commandReq.Command, ScheduledAt: unixTimestamp})
+	taskId, err := s.insertTaskIntoDB(context.Background(), Task{Command: commandReq.Command, ScheduledAt: pgtype.Timestamp{Time: unixTimestamp}})
 
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to submit task. Error: %s", err.Error()),
@@ -109,22 +117,116 @@ func (s *SchedulerServer) handlePostTask(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Respond with the parsed data (for demonstration purposes)
-	response := fmt.Sprintf("Command: %s\nScheduled At (Unix Timestamp): %d\nTask ID: %s",
-		commandReq.Command, unixTimestamp, taskId)
-	w.Write([]byte(response))
+	response := struct {
+		Command     string `json:"command"`
+		ScheduledAt int64  `json:"scheduled_at"`
+		TaskID      string `json:"task_id"`
+	}{
+		Command:     commandReq.Command,
+		ScheduledAt: unixTimestamp.Unix(),
+		TaskID:      taskId,
+	}
+
+	jsonResponse, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonResponse)
+}
+
+func (s *SchedulerServer) handleGetTaskStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Only GET method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get the task ID from the query parameters
+	taskID := r.URL.Query().Get("task_id")
+
+	// Check if the task ID is empty
+	if taskID == "" {
+		http.Error(w, "Task ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Query the database to get the task status
+	var task Task
+	err := s.dbPool.QueryRow(context.Background(), "SELECT * FROM tasks WHERE id = $1", taskID).Scan(&task.Id, &task.Command, &task.ScheduledAt, &task.PickedAt, &task.StartedAt, &task.CompletedAt, &task.FailedAt)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get task status. Error: %s", err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	// Prepare the response JSON
+	response := struct {
+		TaskID      string `json:"task_id"`
+		Command     string `json:"command"`
+		ScheduledAt string `json:"scheduled_at,omitempty"`
+		PickedAt    string `json:"picked_at,omitempty"`
+		StartedAt   string `json:"started_at,omitempty"`
+		CompletedAt string `json:"completed_at,omitempty"`
+		FailedAt    string `json:"failed_at,omitempty"`
+	}{
+		TaskID:      task.Id,
+		Command:     task.Command,
+		ScheduledAt: "",
+		PickedAt:    "",
+		StartedAt:   "",
+		CompletedAt: "",
+		FailedAt:    "",
+	}
+
+	// Set the scheduled_at time if non-null.
+	if task.ScheduledAt.Status == 2 {
+		response.ScheduledAt = task.ScheduledAt.Time.String()
+	}
+
+	// Set the picked_at time if non-null.
+	if task.PickedAt.Status == 2 {
+		response.PickedAt = task.PickedAt.Time.String()
+	}
+
+	// Set the started_at time if non-null.
+	if task.StartedAt.Status == 2 {
+		response.StartedAt = task.StartedAt.Time.String()
+	}
+
+	// Set the completed_at time if non-null.
+	if task.CompletedAt.Status == 2 {
+		response.CompletedAt = task.CompletedAt.Time.String()
+	}
+
+	// Set the failed_at time if non-null.
+	if task.FailedAt.Status == 2 {
+		response.FailedAt = task.FailedAt.Time.String()
+	}
+
+	// Convert the response struct to JSON
+	jsonResponse, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, "Failed to marshal JSON response", http.StatusInternalServerError)
+		return
+	}
+
+	// Set the Content-Type header to application/json
+	w.Header().Set("Content-Type", "application/json")
+
+	// Write the JSON response
+	w.Write(jsonResponse)
 }
 
 // insertTaskIntoDB inserts a new task into the tasks table and returns the autogenerated UUID.
 func (s *SchedulerServer) insertTaskIntoDB(ctx context.Context, task Task) (string, error) {
-	// Convert the Unix timestamp (int64) to time.Time in Go
-	scheduledTime := time.Unix(task.ScheduledAt, 0)
 	// SQL statement with RETURNING clause
 	sqlStatement := "INSERT INTO tasks (command, scheduled_at) VALUES ($1, $2) RETURNING id"
 
 	var insertedId string
 
 	// Execute the query and scan the returned id into the insertedId variable
-	err := s.dbPool.QueryRow(ctx, sqlStatement, task.Command, scheduledTime).Scan(&insertedId)
+	err := s.dbPool.QueryRow(ctx, sqlStatement, task.Command, task.ScheduledAt.Time).Scan(&insertedId)
 	if err != nil {
 		return "", err
 	}
