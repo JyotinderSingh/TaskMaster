@@ -211,7 +211,7 @@ func (s *CoordinatorServer) SendHeartbeat(ctx context.Context, in *pb.HeartbeatR
 	workerID := in.GetWorkerId()
 
 	if worker, ok := s.WorkerPool[workerID]; ok {
-		log.Println("Reset hearbeat miss for worker:", workerID)
+		// log.Println("Reset hearbeat miss for worker:", workerID)
 		worker.heartbeatMisses = 0
 	} else {
 		log.Println("Registering worker:", workerID)

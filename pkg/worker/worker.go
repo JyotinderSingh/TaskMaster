@@ -6,7 +6,9 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/JyotinderSingh/task-queue/pkg/common"
@@ -63,7 +65,11 @@ func (w *WorkerServer) Start() error {
 
 	go w.periodicHeartbeat()
 
-	return w.startGRPCServer()
+	if err := w.startGRPCServer(); err != nil {
+		return fmt.Errorf("gRPC server start failed: %w", err)
+	}
+
+	return w.awaitShutdown()
 }
 
 func (w *WorkerServer) connectToCoordinator() error {
@@ -134,7 +140,21 @@ func (w *WorkerServer) startGRPCServer() error {
 	w.grpcServer = grpc.NewServer()
 	pb.RegisterWorkerServiceServer(w.grpcServer, w)
 
-	return w.grpcServer.Serve(w.listener)
+	go func() {
+		if err := w.grpcServer.Serve(w.listener); err != nil {
+			log.Fatalf("gRPC server failed: %v", err)
+		}
+	}()
+
+	return nil
+}
+
+func (w *WorkerServer) awaitShutdown() error {
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+
+	return w.Stop()
 }
 
 // Stop gracefully shuts down the WorkerServer.
