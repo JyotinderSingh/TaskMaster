@@ -17,6 +17,7 @@ import (
 
 	pb "github.com/JyotinderSingh/task-queue/pkg/grpcapi"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v4/pgxpool"
 
 	"github.com/JyotinderSingh/task-queue/pkg/common"
 )
@@ -40,6 +41,8 @@ type CoordinatorServer struct {
 	roundRobinIndex     uint32
 	TaskStatus          map[string]pb.TaskStatus
 	taskStatusMutex     sync.RWMutex
+	dbConnectionString  string
+	dbPool              *pgxpool.Pool
 	ctx                 context.Context    // The root context for all goroutines
 	cancel              context.CancelFunc // Function to cancel the context
 	wg                  sync.WaitGroup     // WaitGroup to wait for all goroutines to finish
@@ -53,13 +56,14 @@ type workerInfo struct {
 }
 
 // NewServer initializes and returns a new Server instance.
-func NewServer(port string) *CoordinatorServer {
+func NewServer(port string, dbConnectionString string) *CoordinatorServer {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &CoordinatorServer{
 		WorkerPool:         make(map[uint32]*workerInfo),
 		TaskStatus:         make(map[string]pb.TaskStatus),
 		maxHeartbeatMisses: defaultMaxMisses,
 		heartbeatInterval:  common.DefaultHeartbeat,
+		dbConnectionString: dbConnectionString,
 		serverPort:         port,
 		ctx:                ctx,
 		cancel:             cancel,
@@ -68,11 +72,19 @@ func NewServer(port string) *CoordinatorServer {
 
 // Start initiates the server's operations.
 func (s *CoordinatorServer) Start() error {
-	go s.manageworkerPool()
+	var err error
+	go s.manageWorkerPool()
 
-	if err := s.startGRPCServer(); err != nil {
+	if err = s.startGRPCServer(); err != nil {
 		return fmt.Errorf("gRPC server start failed: %w", err)
 	}
+
+	s.dbPool, err = common.ConnectToDatabase(s.ctx, s.dbConnectionString)
+	if err != nil {
+		return err
+	}
+
+	go s.scanDatabase()
 
 	return s.awaitShutdown()
 }
@@ -127,6 +139,8 @@ func (s *CoordinatorServer) Stop() error {
 	if s.listener != nil {
 		return s.listener.Close()
 	}
+
+	s.dbPool.Close()
 	return nil
 }
 
@@ -238,7 +252,85 @@ func (s *CoordinatorServer) SendHeartbeat(ctx context.Context, in *pb.HeartbeatR
 	return &pb.HeartbeatResponse{Acknowledged: true}, nil
 }
 
-func (s *CoordinatorServer) manageworkerPool() {
+func (s *CoordinatorServer) scanDatabase() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			go s.executeAllScheduledTasks()
+		case <-s.ctx.Done():
+			log.Println("Shutting down database scanner.")
+			return
+		}
+	}
+}
+
+func (s *CoordinatorServer) executeAllScheduledTasks() {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	conn, err := s.dbPool.Acquire(ctx)
+	if err != nil {
+		log.Printf("Could not acquire connection from dbpool: %v\n", err)
+		return
+	}
+	defer conn.Release()
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		log.Printf("Unable to start transaction: %v\n", err)
+		return
+	}
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && err.Error() != "tx is closed" {
+			log.Printf("ERROR: %#v", err)
+			log.Printf("Failed to rollback transaction: %v\n", err)
+		}
+	}()
+
+	rows, err := tx.Query(ctx, `SELECT id, command FROM tasks WHERE scheduled_at < (NOW() + INTERVAL '30 seconds') AND picked_at IS NULL FOR UPDATE SKIP LOCKED`)
+	if err != nil {
+		log.Printf("Error executing query: %v\n", err)
+		return
+	}
+	defer rows.Close()
+
+	var tasks []*pb.TaskRequest
+	for rows.Next() {
+		var id, command string
+		if err := rows.Scan(&id, &command); err != nil {
+			log.Printf("Failed to scan row: %v\n", err)
+			continue
+		}
+
+		tasks = append(tasks, &pb.TaskRequest{TaskId: id, Data: command})
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("Error iterating rows: %v\n", err)
+		return
+	}
+
+	for _, task := range tasks {
+		if err := s.submitTaskToWorker(task); err != nil {
+			log.Printf("Failed to submit task %s: %v\n", task.GetTaskId(), err)
+			continue
+		}
+
+		if _, err := tx.Exec(ctx, `UPDATE tasks SET picked_at = NOW() WHERE id = $1`, task.GetTaskId()); err != nil {
+			log.Printf("Failed to update task %s: %v\n", task.GetTaskId(), err)
+			continue
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("Failed to commit transaction: %v\n", err)
+	}
+}
+
+func (s *CoordinatorServer) manageWorkerPool() {
 	s.wg.Add(1)
 	defer s.wg.Done()
 

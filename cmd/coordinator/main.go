@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 
+	"github.com/JyotinderSingh/task-queue/pkg/common"
 	"github.com/JyotinderSingh/task-queue/pkg/coordinator"
 )
 
@@ -12,7 +13,7 @@ var (
 
 func main() {
 	flag.Parse()
-
-	coordinator := coordinator.NewServer(*coordinatorPort)
+	dbConnectionString := common.GetDBConnectionString()
+	coordinator := coordinator.NewServer(*coordinatorPort, dbConnectionString)
 	coordinator.Start()
 }
