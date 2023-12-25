@@ -168,14 +168,30 @@ func (s *CoordinatorServer) SubmitTask(ctx context.Context, in *pb.ClientTaskReq
 }
 
 func (s *CoordinatorServer) UpdateTaskStatus(ctx context.Context, req *pb.UpdateTaskStatusRequest) (*pb.UpdateTaskStatusResponse, error) {
-	// Update the task status in your data store here.
-	// This is just a placeholder implementation.
 	status := req.GetStatus()
 	taskId := req.GetTaskId()
+	var timestamp time.Time
+	var column string
+	switch status {
+	case pb.TaskStatus_STARTED:
+		timestamp = time.Unix(req.GetStartedAt(), 0)
+		column = "started_at"
+	case pb.TaskStatus_COMPLETE:
+		timestamp = time.Unix(req.GetCompletedAt(), 0)
+		column = "completed_at"
+	case pb.TaskStatus_FAILED:
+		timestamp = time.Unix(req.GetFailedAt(), 0)
+		column = "failed_at"
+	default:
+		log.Println("Invalid Status in UpdateStatusRequest")
+		return nil, errors.ErrUnsupported
+	}
 
-	s.taskStatusMutex.Lock()
-	defer s.taskStatusMutex.Unlock()
-	s.TaskStatus[taskId] = status
+	sqlStatement := `UPDATE tasks SET ` + column + ` = $1 WHERE id = $2`
+	if _, err := s.dbPool.Exec(context.Background(), sqlStatement, timestamp, taskId); err != nil {
+		log.Printf("Could not update task status for task %s: %+v", taskId, err)
+		return nil, err
+	}
 
 	return &pb.UpdateTaskStatusResponse{Success: true}, nil
 }

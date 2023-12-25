@@ -219,10 +219,11 @@ func (w *WorkerServer) worker() {
 	for {
 		select {
 		case task := <-w.taskQueue:
-			w.coordinatorServiceClient.UpdateTaskStatus(context.Background(),
+			go w.coordinatorServiceClient.UpdateTaskStatus(context.Background(),
 				&pb.UpdateTaskStatusRequest{
-					TaskId: task.GetTaskId(),
-					Status: pb.TaskStatus_PROCESSING,
+					TaskId:    task.GetTaskId(),
+					Status:    pb.TaskStatus_STARTED,
+					StartedAt: time.Now().Unix(),
 				})
 			w.processTask(task)
 		case <-w.ctx.Done():
@@ -236,9 +237,10 @@ func (w *WorkerServer) processTask(task *pb.TaskRequest) {
 	log.Printf("Processing task: %+v", task)
 	time.Sleep(taskProcessTime)
 	log.Printf("Completed task: %+v", task)
-	w.coordinatorServiceClient.UpdateTaskStatus(context.Background(),
+	go w.coordinatorServiceClient.UpdateTaskStatus(context.Background(),
 		&pb.UpdateTaskStatusRequest{
-			TaskId: task.GetTaskId(),
-			Status: pb.TaskStatus_COMPLETE,
+			TaskId:      task.GetTaskId(),
+			Status:      pb.TaskStatus_COMPLETE,
+			CompletedAt: time.Now().Unix(),
 		})
 }

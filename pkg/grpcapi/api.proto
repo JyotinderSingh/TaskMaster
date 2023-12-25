@@ -6,9 +6,9 @@ option go_package = "github.com/JyotinderSingh/task-queue/pkg/grpcapi";
 
 enum TaskStatus {
   QUEUED = 0;
-	PROCESSING = 1;
-	COMPLETE = 2;
-	FAILED = 3;
+  STARTED = 1;
+  COMPLETE = 2;
+  FAILED = 3;
 }
 
 // The worker service definition.
@@ -71,6 +71,9 @@ message HeartbeatResponse {
 message UpdateTaskStatusRequest {
   string task_id = 1;
   TaskStatus status = 2;
+  int64 started_at = 3;
+  int64 completed_at = 4;
+  int64 failed_at = 5;
 }
 
 message UpdateTaskStatusResponse {

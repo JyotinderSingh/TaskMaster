@@ -49,7 +49,7 @@ func TestE2ESuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get task status: %v", err)
 	}
-	assertion.Equal(pb.TaskStatus_PROCESSING, statusResp.GetStatus())
+	assertion.Equal(pb.TaskStatus_STARTED, statusResp.GetStatus())
 
 	err = WaitForCondition(func() bool {
 		statusResp, err = client.GetTaskStatus(context.Background(), &pb.GetTaskStatusRequest{TaskId: taskId})
