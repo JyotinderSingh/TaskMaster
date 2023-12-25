@@ -82,6 +82,48 @@ func TestWorkersNotAvailable(t *testing.T) {
 	}
 }
 
+func TestCoordinatorFailoverForInactiveWorkers(t *testing.T) {
+	setup(2)
+	defer teardown()
+
+	// Stop one worker in the cluster.
+	cluster.workers[0].Stop()
+
+	err := WaitForCondition(func() bool {
+		cluster.coordinator.WorkerPoolMutex.Lock()
+		numWorkers := len(cluster.coordinator.WorkerPool)
+		cluster.coordinator.WorkerPoolMutex.Unlock()
+		return numWorkers == 1
+	}, 20*time.Second, common.DefaultHeartbeat)
+
+	if err != nil {
+		log.Fatalf("Coordinator did not clean up inactive workers.")
+	}
+
+	for i := 0; i < 4; i++ {
+		_, err := client.SubmitTask(context.Background(), &pb.ClientTaskRequest{Data: "test"})
+		if err != nil {
+			t.Fatalf("Failed to submit task: %v", err)
+		}
+	}
+
+	err = WaitForCondition(func() bool {
+		worker := cluster.workers[1]
+		worker.ReceivedTasksMutex.Lock()
+		if len(worker.ReceivedTasks) != 4 {
+			worker.ReceivedTasksMutex.Unlock()
+			return false
+		}
+		worker.ReceivedTasksMutex.Unlock()
+
+		return true
+	}, 10*time.Second, 500*time.Millisecond)
+
+	if err != nil {
+		log.Fatalf("Coordinator not routing requests correctly after failover.")
+	}
+}
+
 func TestTaskLoadBalancingOverWorkers(t *testing.T) {
 	setup(4)
 	defer teardown()
