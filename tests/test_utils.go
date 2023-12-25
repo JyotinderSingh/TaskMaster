@@ -61,9 +61,14 @@ func (c *Cluster) StopCluster() {
 		}
 	}
 	if err := c.coordinator.Stop(); err != nil {
-		log.Printf("Failed to stop server: %v", err)
+		log.Printf("Failed to stop coordinator: %v", err)
 	}
 
+	if err := c.scheduler.Stop(); err != nil {
+		log.Printf("Failed to stop scheduler: %v", err)
+	}
+
+	c.database.Terminate(context.Background())
 }
 
 func startServer(srv interface {

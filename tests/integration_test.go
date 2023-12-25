@@ -13,7 +13,6 @@ import (
 
 	"github.com/JyotinderSingh/task-queue/pkg/common"
 	pb "github.com/JyotinderSingh/task-queue/pkg/grpcapi"
-	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 )
 
@@ -80,41 +79,6 @@ func TestE2ESuccess(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("Response did not contain the keys 'picked_at', 'started_at', and 'completed_at': %v", err)
-	}
-
-	// // Assert scheduled_at value
-	// expectedScheduledAt := "2023-12-25 22:34:00 +0000 UTC"
-	// assertion.Equal(expectedScheduledAt, getResponse["scheduled_at"].(string))
-}
-
-func TestCoordinatorE2ESuccess_deprecated(t *testing.T) {
-	setup(2)
-	defer teardown()
-
-	assertion := assert.New(t)
-
-	submitResp, err := client.SubmitTask(context.Background(), &pb.ClientTaskRequest{Data: "test"})
-	if err != nil {
-		t.Fatalf("Failed to submit task: %v", err)
-	}
-	taskId := submitResp.GetTaskId()
-
-	statusResp, err := client.GetTaskStatus(context.Background(), &pb.GetTaskStatusRequest{TaskId: taskId})
-	if err != nil {
-		t.Fatalf("Failed to get task status: %v", err)
-	}
-	assertion.Equal(pb.TaskStatus_STARTED, statusResp.GetStatus())
-
-	err = WaitForCondition(func() bool {
-		statusResp, err = client.GetTaskStatus(context.Background(), &pb.GetTaskStatusRequest{TaskId: taskId})
-		if err != nil {
-			log.Fatalf("Failed to get task status: %v", err)
-		}
-		return statusResp.GetStatus() == pb.TaskStatus_COMPLETE
-	}, 10*time.Second, 500*time.Millisecond)
-
-	if err != nil {
-		t.Fatalf("Task did not complete within the timeout: %v", err)
 	}
 }
 
@@ -210,9 +174,4 @@ func TestTaskLoadBalancingOverWorkers(t *testing.T) {
 		}
 		t.Fatalf("Coordinator is not using round-robin to execute tasks over worker pool.")
 	}
-}
-
-func TestDBConnection(t *testing.T) {
-	setup(4)
-
 }

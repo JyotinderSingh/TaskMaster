@@ -25,6 +25,7 @@ import (
 const (
 	shutdownTimeout  = 5 * time.Second
 	defaultMaxMisses = 1
+	scanInterval     = 10 * time.Second
 )
 
 type CoordinatorServer struct {
@@ -39,8 +40,6 @@ type CoordinatorServer struct {
 	maxHeartbeatMisses  uint8
 	heartbeatInterval   time.Duration
 	roundRobinIndex     uint32
-	TaskStatus          map[string]pb.TaskStatus
-	taskStatusMutex     sync.RWMutex
 	dbConnectionString  string
 	dbPool              *pgxpool.Pool
 	ctx                 context.Context    // The root context for all goroutines
@@ -60,7 +59,6 @@ func NewServer(port string, dbConnectionString string) *CoordinatorServer {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &CoordinatorServer{
 		WorkerPool:         make(map[uint32]*workerInfo),
-		TaskStatus:         make(map[string]pb.TaskStatus),
 		maxHeartbeatMisses: defaultMaxMisses,
 		heartbeatInterval:  common.DefaultHeartbeat,
 		dbConnectionString: dbConnectionString,
@@ -145,7 +143,6 @@ func (s *CoordinatorServer) Stop() error {
 }
 
 func (s *CoordinatorServer) SubmitTask(ctx context.Context, in *pb.ClientTaskRequest) (*pb.ClientTaskResponse, error) {
-	log.Printf("Called submit task")
 	data := in.GetData()
 	taskId := uuid.New().String()
 	task := &pb.TaskRequest{
@@ -156,10 +153,6 @@ func (s *CoordinatorServer) SubmitTask(ctx context.Context, in *pb.ClientTaskReq
 	if err := s.submitTaskToWorker(task); err != nil {
 		return nil, err
 	}
-
-	s.taskStatusMutex.Lock()
-	defer s.taskStatusMutex.Unlock()
-	s.TaskStatus[taskId] = pb.TaskStatus_QUEUED
 
 	return &pb.ClientTaskResponse{
 		Message: "Task submitted successfully",
@@ -172,6 +165,7 @@ func (s *CoordinatorServer) UpdateTaskStatus(ctx context.Context, req *pb.Update
 	taskId := req.GetTaskId()
 	var timestamp time.Time
 	var column string
+
 	switch status {
 	case pb.TaskStatus_STARTED:
 		timestamp = time.Unix(req.GetStartedAt(), 0)
@@ -187,8 +181,9 @@ func (s *CoordinatorServer) UpdateTaskStatus(ctx context.Context, req *pb.Update
 		return nil, errors.ErrUnsupported
 	}
 
-	sqlStatement := `UPDATE tasks SET ` + column + ` = $1 WHERE id = $2`
-	if _, err := s.dbPool.Exec(context.Background(), sqlStatement, timestamp, taskId); err != nil {
+	sqlStatement := fmt.Sprintf("UPDATE tasks SET %s = $1 WHERE id = $2", column)
+	_, err := s.dbPool.Exec(ctx, sqlStatement, timestamp, taskId)
+	if err != nil {
 		log.Printf("Could not update task status for task %s: %+v", taskId, err)
 		return nil, err
 	}
@@ -208,17 +203,6 @@ func (s *CoordinatorServer) getNextWorker() *workerInfo {
 	worker := s.WorkerPool[s.WorkerPoolKeys[s.roundRobinIndex%uint32(workerCount)]]
 	s.roundRobinIndex++
 	return worker
-}
-
-func (s *CoordinatorServer) GetTaskStatus(ctx context.Context, in *pb.GetTaskStatusRequest) (*pb.GetTaskStatusResponse, error) {
-	taskId := in.GetTaskId()
-	s.taskStatusMutex.RLock()
-	defer s.taskStatusMutex.RUnlock()
-
-	return &pb.GetTaskStatusResponse{
-		TaskId: taskId,
-		Status: s.TaskStatus[taskId],
-	}, nil
 }
 
 func (s *CoordinatorServer) submitTaskToWorker(task *pb.TaskRequest) error {
@@ -269,7 +253,7 @@ func (s *CoordinatorServer) SendHeartbeat(ctx context.Context, in *pb.HeartbeatR
 }
 
 func (s *CoordinatorServer) scanDatabase() {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(scanInterval)
 	defer ticker.Stop()
 
 	for {
@@ -284,21 +268,15 @@ func (s *CoordinatorServer) scanDatabase() {
 }
 
 func (s *CoordinatorServer) executeAllScheduledTasks() {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	conn, err := s.dbPool.Acquire(ctx)
-	if err != nil {
-		log.Printf("Could not acquire connection from dbpool: %v\n", err)
-		return
-	}
-	defer conn.Release()
-
-	tx, err := conn.Begin(ctx)
+	tx, err := s.dbPool.Begin(ctx)
 	if err != nil {
 		log.Printf("Unable to start transaction: %v\n", err)
 		return
 	}
+
 	defer func() {
 		if err := tx.Rollback(ctx); err != nil && err.Error() != "tx is closed" {
 			log.Printf("ERROR: %#v", err)

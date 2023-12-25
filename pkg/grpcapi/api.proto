@@ -37,17 +37,6 @@ service CoordinatorService {
   rpc SendHeartbeat (HeartbeatRequest) returns (HeartbeatResponse) {}
   // Updates a Task Status
   rpc UpdateTaskStatus (UpdateTaskStatusRequest) returns (UpdateTaskStatusResponse){}
-  // Retrieves a task's status.
-  rpc GetTaskStatus (GetTaskStatusRequest) returns (GetTaskStatusResponse) {}
-}
-
-message GetTaskStatusRequest {
-  string task_id = 1;
-}
-
-message GetTaskStatusResponse {
-  string task_id = 1;
-  TaskStatus status = 2;
 }
 
 message ClientTaskRequest {

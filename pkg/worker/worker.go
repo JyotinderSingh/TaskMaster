@@ -216,20 +216,27 @@ func (w *WorkerServer) startWorkerPool(numWorkers int) {
 // worker is the function run by each worker goroutine.
 func (w *WorkerServer) worker() {
 	defer w.wg.Done() // Signal this worker is done when the function returns.
+
 	for {
 		select {
 		case task := <-w.taskQueue:
-			go w.coordinatorServiceClient.UpdateTaskStatus(context.Background(),
-				&pb.UpdateTaskStatusRequest{
-					TaskId:    task.GetTaskId(),
-					Status:    pb.TaskStatus_STARTED,
-					StartedAt: time.Now().Unix(),
-				})
+			go w.updateTaskStatus(task, pb.TaskStatus_STARTED)
 			w.processTask(task)
+			go w.updateTaskStatus(task, pb.TaskStatus_COMPLETE)
 		case <-w.ctx.Done():
 			return
 		}
 	}
+}
+
+// updateTaskStatus updates the status of a task.
+func (w *WorkerServer) updateTaskStatus(task *pb.TaskRequest, status pb.TaskStatus) {
+	w.coordinatorServiceClient.UpdateTaskStatus(context.Background(), &pb.UpdateTaskStatusRequest{
+		TaskId:      task.GetTaskId(),
+		Status:      status,
+		StartedAt:   time.Now().Unix(),
+		CompletedAt: time.Now().Unix(),
+	})
 }
 
 // processTask simulates task processing.
@@ -237,10 +244,4 @@ func (w *WorkerServer) processTask(task *pb.TaskRequest) {
 	log.Printf("Processing task: %+v", task)
 	time.Sleep(taskProcessTime)
 	log.Printf("Completed task: %+v", task)
-	go w.coordinatorServiceClient.UpdateTaskStatus(context.Background(),
-		&pb.UpdateTaskStatusRequest{
-			TaskId:      task.GetTaskId(),
-			Status:      pb.TaskStatus_COMPLETE,
-			CompletedAt: time.Now().Unix(),
-		})
 }
