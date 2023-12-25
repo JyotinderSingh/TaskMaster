@@ -19,7 +19,7 @@ var client pb.CoordinatorServiceClient
 
 func setup(numWorkers int8) {
 	cluster = Cluster{}
-	cluster.LaunchCluster(":50050", numWorkers)
+	cluster.LaunchCluster(":8081", ":50050", numWorkers)
 
 	conn, client = CreateTestClient("localhost:50050")
 }
@@ -156,4 +156,9 @@ func TestTaskLoadBalancingOverWorkers(t *testing.T) {
 		}
 		t.Fatalf("Coordinator is not using round-robin to execute tasks over worker pool.")
 	}
+}
+
+func TestDBConnection(t *testing.T) {
+	setup(4)
+
 }

@@ -1,5 +1,5 @@
 # Use an official Go runtime as a parent image
-FROM golang:1.19
+FROM golang:1.21
 
 # Install Protobuf compiler and Go-related packages
 RUN apt-get update && apt-get install -y \
@@ -30,4 +30,4 @@ RUN ./pkg/grpcapi/build.sh
 RUN go build -o coordinator main.go
 
 # Run the coordinator when the container launches
-CMD ./coordinator --coordinator_port=:8080
+CMD ["./coordinator", "--coordinator_port=:8080"]

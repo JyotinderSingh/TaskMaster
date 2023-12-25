@@ -1,36 +1,54 @@
 package tests
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/JyotinderSingh/task-queue/pkg/coordinator"
 	pb "github.com/JyotinderSingh/task-queue/pkg/grpcapi"
+	"github.com/JyotinderSingh/task-queue/pkg/scheduler"
 	"github.com/JyotinderSingh/task-queue/pkg/worker"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+const (
+	postgresUser     = "postgres"
+	postgresPassword = "postgres"
+	postgresDb       = "scheduler"
+	postgresHost     = "localhost"
+)
+
 type Cluster struct {
 	coordinatorAddress string
+	scheduler          *scheduler.SchedulerServer
 	coordinator        *coordinator.CoordinatorServer
 	workers            []*worker.WorkerServer
+	database           testcontainers.Container
 }
 
-func (c *Cluster) LaunchCluster(coordinatorPort string, numWorkers int8) {
-	c.coordinatorAddress = "localhost" + coordinatorPort
-	c.coordinator = coordinator.NewServer(coordinatorPort)
-
-	c.workers = make([]*worker.WorkerServer, numWorkers)
-
-	for i := 0; i < int(numWorkers); i++ {
-		c.workers[i] = worker.NewServer("", c.coordinatorAddress)
+func (c *Cluster) LaunchCluster(schedulerPort string, coordinatorPort string, numWorkers int8) {
+	// Launch database
+	if err := c.createDatabase(); err != nil {
+		log.Fatalf("Could not launch database container: %+v", err)
 	}
 
+	c.coordinatorAddress = "localhost" + coordinatorPort
+	c.coordinator = coordinator.NewServer(coordinatorPort, getDbConnectionString())
 	startServer(c.coordinator)
-	for _, worker := range c.workers {
-		startServer(worker)
+
+	c.scheduler = scheduler.NewServer(schedulerPort, getDbConnectionString())
+	startServer(c.scheduler)
+
+	c.workers = make([]*worker.WorkerServer, numWorkers)
+	for i := 0; i < int(numWorkers); i++ {
+		c.workers[i] = worker.NewServer("", c.coordinatorAddress)
+		startServer(c.workers[i])
+
 	}
 
 	c.waitForWorkers()
@@ -72,6 +90,36 @@ func (c *Cluster) waitForWorkers() {
 		c.coordinator.WorkerPoolMutex.Unlock()
 		time.Sleep(time.Second)
 	}
+}
+
+func getDbConnectionString() string {
+	return fmt.Sprintf("postgres://%s:%s@%s:5432/%s",
+		postgresUser, postgresPassword, postgresHost, postgresDb)
+
+}
+
+func (c *Cluster) createDatabase() error {
+	ctx := context.Background()
+
+	// Define the container request using your custom image
+	req := testcontainers.ContainerRequest{
+		Image:        "scheduler-postgres", // Use your custom image
+		ExposedPorts: []string{"5432:5432/tcp"},
+		Env: map[string]string{
+			"POSTGRES_PASSWORD": postgresPassword,
+			"POSTGRES_USER":     postgresUser,
+			"POSTGRES_DB":       postgresDb,
+		},
+		WaitingFor: wait.ForListeningPort("5432/tcp"),
+	}
+
+	// Start the container
+	var err error
+	c.database, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: req,
+		Started:          true,
+	})
+	return err
 }
 
 func CreateTestClient(coordinatorAddress string) (*grpc.ClientConn, pb.CoordinatorServiceClient) {
