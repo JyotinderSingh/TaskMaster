@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/JyotinderSingh/task-queue/pkg/common"
 	pb "github.com/JyotinderSingh/task-queue/pkg/grpcapi"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
@@ -15,13 +16,6 @@ import (
 var cluster Cluster
 var conn *grpc.ClientConn
 var client pb.CoordinatorServiceClient
-
-func TestMain(m *testing.M) {
-	setup()
-	code := m.Run()
-	teardown()
-	os.Exit(code)
-}
 
 func setup() {
 	cluster = Cluster{}
@@ -34,10 +28,17 @@ func teardown() {
 	cluster.StopCluster()
 }
 
-func TestServerIntegration(t *testing.T) {
+func TestMain(m *testing.M) {
+	code := m.Run()
+	os.Exit(code)
+}
+
+func TestE2ESuccess(t *testing.T) {
+	setup()
+	defer teardown()
+
 	assertion := assert.New(t)
 
-	// time.Sleep(10 * time.Second)
 	submitResp, err := client.SubmitTask(context.Background(), &pb.ClientTaskRequest{Data: "test"})
 	if err != nil {
 		t.Fatalf("Failed to submit task: %v", err)
@@ -56,9 +57,27 @@ func TestServerIntegration(t *testing.T) {
 			log.Fatalf("Failed to get task status: %v", err)
 		}
 		return statusResp.GetStatus() == pb.TaskStatus_COMPLETE
-	}, 10*time.Second)
+	}, 10*time.Second, 500*time.Millisecond)
 
 	if err != nil {
 		t.Fatalf("Task did not complete within the timeout: %v", err)
+	}
+}
+
+func TestWorkersNotAvailable(t *testing.T) {
+	setup()
+	defer teardown()
+
+	for _, worker := range cluster.workers {
+		worker.Stop()
+	}
+
+	err := WaitForCondition(func() bool {
+		_, err := client.SubmitTask(context.Background(), &pb.ClientTaskRequest{Data: "test"})
+		return err != nil && err.Error() == "rpc error: code = Unknown desc = no workers available"
+	}, 20*time.Second, common.DefaultHeartbeat)
+
+	if err != nil {
+		t.Fatalf("Coordinator did not clean up the workers within SLO. Error: %s", err.Error())
 	}
 }

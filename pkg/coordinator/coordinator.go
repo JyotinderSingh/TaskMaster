@@ -23,7 +23,7 @@ import (
 
 const (
 	shutdownTimeout  = 5 * time.Second
-	defaultMaxMisses = 2
+	defaultMaxMisses = 1
 )
 
 type CoordinatorServer struct {

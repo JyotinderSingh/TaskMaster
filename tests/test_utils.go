@@ -78,11 +78,11 @@ func CreateTestClient(coordinatorAddress string) (*grpc.ClientConn, pb.Coordinat
 	return conn, pb.NewCoordinatorServiceClient(conn)
 }
 
-func WaitForCondition(condition func() bool, timeout time.Duration) error {
+func WaitForCondition(condition func() bool, timeout time.Duration, retryInterval time.Duration) error {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(retryInterval)
 	defer ticker.Stop()
 
 	for {
