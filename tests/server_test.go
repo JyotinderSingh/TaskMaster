@@ -105,13 +105,13 @@ func TestTaskLoadBalancingOverWorkers(t *testing.T) {
 		return true
 	}, 5*time.Second, 500*time.Millisecond)
 
-	for idx, worker := range cluster.workers {
-		worker.ReceivedTasksMutex.Lock()
-		log.Printf("Worker %d has %d tasks in its log", idx, len(worker.ReceivedTasks))
-
-		worker.ReceivedTasksMutex.Unlock()
-	}
 	if err != nil {
+		for idx, worker := range cluster.workers {
+			worker.ReceivedTasksMutex.Lock()
+			log.Printf("Worker %d has %d tasks in its log", idx, len(worker.ReceivedTasks))
+
+			worker.ReceivedTasksMutex.Unlock()
+		}
 		t.Fatalf("Coordinator is not using round-robin to execute tasks over worker pool.")
 	}
 }

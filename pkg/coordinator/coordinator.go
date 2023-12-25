@@ -32,7 +32,7 @@ type CoordinatorServer struct {
 	listener            net.Listener
 	grpcServer          *grpc.Server
 	WorkerPool          map[uint32]*workerInfo
-	WorkerPoolMutex     sync.RWMutex
+	WorkerPoolMutex     sync.Mutex
 	WorkerPoolKeys      []uint32
 	WorkerPoolKeysMutex sync.RWMutex
 	maxHeartbeatMisses  uint8
@@ -68,7 +68,7 @@ func NewServer(port string) *CoordinatorServer {
 
 // Start initiates the server's operations.
 func (s *CoordinatorServer) Start() error {
-	go s.manageWorkerPool()
+	go s.manageworkerPool()
 
 	if err := s.startGRPCServer(); err != nil {
 		return fmt.Errorf("gRPC server start failed: %w", err)
@@ -112,8 +112,8 @@ func (s *CoordinatorServer) Stop() error {
 	// Wait for all goroutines to finish
 	s.wg.Wait()
 
-	s.WorkerPoolMutex.RLock()
-	defer s.WorkerPoolMutex.RUnlock()
+	s.WorkerPoolMutex.Lock()
+	defer s.WorkerPoolMutex.Unlock()
 	for _, worker := range s.WorkerPool {
 		if worker.grpcConnection != nil {
 			worker.grpcConnection.Close()
@@ -223,14 +223,14 @@ func (s *CoordinatorServer) SendHeartbeat(ctx context.Context, in *pb.HeartbeatR
 			workerServiceClient: pb.NewWorkerServiceClient(conn),
 		}
 
-		workerCount := len(s.WorkerPool)
-
 		s.WorkerPoolKeysMutex.Lock()
+		defer s.WorkerPoolKeysMutex.Unlock()
+
+		workerCount := len(s.WorkerPool)
 		s.WorkerPoolKeys = make([]uint32, 0, workerCount)
 		for k := range s.WorkerPool {
 			s.WorkerPoolKeys = append(s.WorkerPoolKeys, k)
 		}
-		s.WorkerPoolKeysMutex.Unlock()
 
 		log.Println("Registered worker:", workerID)
 	}
@@ -238,7 +238,7 @@ func (s *CoordinatorServer) SendHeartbeat(ctx context.Context, in *pb.HeartbeatR
 	return &pb.HeartbeatResponse{Acknowledged: true}, nil
 }
 
-func (s *CoordinatorServer) manageWorkerPool() {
+func (s *CoordinatorServer) manageworkerPool() {
 	s.wg.Add(1)
 	defer s.wg.Done()
 
@@ -261,9 +261,20 @@ func (s *CoordinatorServer) removeInactiveWorkers() {
 
 	for workerID, worker := range s.WorkerPool {
 		if worker.heartbeatMisses > s.maxHeartbeatMisses {
+
 			log.Printf("Removing inactive worker: %d\n", workerID)
 			worker.grpcConnection.Close()
 			delete(s.WorkerPool, workerID)
+
+			s.WorkerPoolKeysMutex.Lock()
+
+			workerCount := len(s.WorkerPool)
+			s.WorkerPoolKeys = make([]uint32, 0, workerCount)
+			for k := range s.WorkerPool {
+				s.WorkerPoolKeys = append(s.WorkerPoolKeys, k)
+			}
+
+			s.WorkerPoolKeysMutex.Unlock()
 		} else {
 			worker.heartbeatMisses++
 		}

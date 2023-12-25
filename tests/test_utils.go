@@ -60,12 +60,16 @@ func startServer(srv interface {
 
 func (c *Cluster) waitForWorkers() {
 	for {
-		c.coordinator.WorkerPoolMutex.RLock()
-		if len(c.coordinator.WorkerPool) == len(c.workers) {
-			c.coordinator.WorkerPoolMutex.RUnlock()
+		c.coordinator.WorkerPoolMutex.Lock()
+
+		c.coordinator.WorkerPoolKeysMutex.RLock()
+		if len(c.coordinator.WorkerPoolKeys) == len(c.workers) {
+			c.coordinator.WorkerPoolKeysMutex.RUnlock()
+			c.coordinator.WorkerPoolMutex.Unlock()
 			break
 		}
-		c.coordinator.WorkerPoolMutex.RUnlock()
+		c.coordinator.WorkerPoolKeysMutex.RUnlock()
+		c.coordinator.WorkerPoolMutex.Unlock()
 		time.Sleep(time.Second)
 	}
 }
