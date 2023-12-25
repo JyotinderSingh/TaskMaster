@@ -2,8 +2,12 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,13 +37,55 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// func TestE2ESuccess(t *testing.T) {
-// 	setup(2)
-// 	defer teardown()
+func TestE2ESuccess(t *testing.T) {
+	setup(2)
+	defer teardown()
 
-// 	assertion = assert.New(t)
+	// Send POST request
+	postData := map[string]interface{}{
+		"command":      "yoooo",
+		"scheduled_at": "2023-12-24T22:34:00+05:30",
+	}
+	postDataBytes, _ := json.Marshal(postData)
+	resp, err := http.Post("http://localhost:8081/schedule", "application/json", strings.NewReader(string(postDataBytes)))
+	if err != nil {
+		t.Fatalf("Failed to send POST request: %v", err)
+	}
+	defer resp.Body.Close()
 
-// }
+	// Parse response JSON
+	var postResponse map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&postResponse)
+	taskID := postResponse["task_id"].(string)
+
+	// Wait for the response to contain the keys "picked_at", "started_at", and "completed_at"
+	err = WaitForCondition(func() bool {
+		getURL := "http://localhost:8081/status?task_id=" + url.QueryEscape(taskID)
+		resp, err := http.Get(getURL)
+		if err != nil {
+			log.Fatalf("Failed to send GET request: %v", err)
+		}
+		defer resp.Body.Close()
+
+		// Parse response JSON
+		var getResponse map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&getResponse)
+
+		// Check if the response contains the keys "picked_at", "started_at", and "completed_at"
+		_, pickedAtExists := getResponse["picked_at"]
+		_, startedAtExists := getResponse["started_at"]
+		_, completedAtExists := getResponse["completed_at"]
+		return pickedAtExists && startedAtExists && completedAtExists
+	}, 20*time.Second, 1*time.Second)
+
+	if err != nil {
+		t.Fatalf("Response did not contain the keys 'picked_at', 'started_at', and 'completed_at': %v", err)
+	}
+
+	// // Assert scheduled_at value
+	// expectedScheduledAt := "2023-12-25 22:34:00 +0000 UTC"
+	// assertion.Equal(expectedScheduledAt, getResponse["scheduled_at"].(string))
+}
 
 func TestCoordinatorE2ESuccess_deprecated(t *testing.T) {
 	setup(2)
