@@ -35,6 +35,8 @@ type WorkerServer struct {
 	coordinatorServiceClient pb.CoordinatorServiceClient
 	heartbeatInterval        time.Duration
 	taskQueue                chan *pb.TaskRequest
+	ReceivedTasks            map[string]*pb.TaskRequest
+	ReceivedTasksMutex       sync.Mutex
 	ctx                      context.Context    // The root context for all goroutines
 	cancel                   context.CancelFunc // Function to cancel the context
 	wg                       sync.WaitGroup     // WaitGroup to wait for all goroutines to finish
@@ -49,6 +51,7 @@ func NewServer(port string, coordinator string) *WorkerServer {
 		coordinatorAddress: coordinator,
 		heartbeatInterval:  common.DefaultHeartbeat,
 		taskQueue:          make(chan *pb.TaskRequest, 100), // Buffered channel
+		ReceivedTasks:      make(map[string]*pb.TaskRequest),
 		ctx:                ctx,
 		cancel:             cancel,
 	}
@@ -188,6 +191,10 @@ func (w *WorkerServer) closeGRPCConnection() {
 // SubmitTask handles the submission of a task to the worker server.
 func (w *WorkerServer) SubmitTask(ctx context.Context, req *pb.TaskRequest) (*pb.TaskResponse, error) {
 	log.Printf("Received task: %+v", req)
+
+	w.ReceivedTasksMutex.Lock()
+	w.ReceivedTasks[req.GetTaskId()] = req
+	w.ReceivedTasksMutex.Unlock()
 
 	w.taskQueue <- req
 

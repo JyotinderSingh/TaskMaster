@@ -28,19 +28,21 @@ const (
 
 type CoordinatorServer struct {
 	pb.UnimplementedCoordinatorServiceServer
-	serverPort         string
-	listener           net.Listener
-	grpcServer         *grpc.Server
-	WorkerPool         map[uint32]*workerInfo
-	WorkerPoolMutex    sync.RWMutex
-	maxHeartbeatMisses uint8
-	heartbeatInterval  time.Duration
-	roundRobinIndex    uint32
-	TaskStatus         map[string]pb.TaskStatus
-	taskStatusMutex    sync.RWMutex
-	ctx                context.Context    // The root context for all goroutines
-	cancel             context.CancelFunc // Function to cancel the context
-	wg                 sync.WaitGroup     // WaitGroup to wait for all goroutines to finish
+	serverPort          string
+	listener            net.Listener
+	grpcServer          *grpc.Server
+	WorkerPool          map[uint32]*workerInfo
+	WorkerPoolMutex     sync.RWMutex
+	WorkerPoolKeys      []uint32
+	WorkerPoolKeysMutex sync.RWMutex
+	maxHeartbeatMisses  uint8
+	heartbeatInterval   time.Duration
+	roundRobinIndex     uint32
+	TaskStatus          map[string]pb.TaskStatus
+	taskStatusMutex     sync.RWMutex
+	ctx                 context.Context    // The root context for all goroutines
+	cancel              context.CancelFunc // Function to cancel the context
+	wg                  sync.WaitGroup     // WaitGroup to wait for all goroutines to finish
 }
 
 type workerInfo struct {
@@ -165,20 +167,15 @@ func (s *CoordinatorServer) UpdateTaskStatus(ctx context.Context, req *pb.Update
 }
 
 func (s *CoordinatorServer) getNextWorker() *workerInfo {
-	s.WorkerPoolMutex.RLock()
-	defer s.WorkerPoolMutex.RUnlock()
+	s.WorkerPoolKeysMutex.RLock()
+	defer s.WorkerPoolKeysMutex.RUnlock()
 
-	workerCount := len(s.WorkerPool)
+	workerCount := len(s.WorkerPoolKeys)
 	if workerCount == 0 {
 		return nil
 	}
 
-	keys := make([]uint32, 0, workerCount)
-	for k := range s.WorkerPool {
-		keys = append(keys, k)
-	}
-
-	worker := s.WorkerPool[keys[s.roundRobinIndex%uint32(workerCount)]]
+	worker := s.WorkerPool[s.WorkerPoolKeys[s.roundRobinIndex%uint32(workerCount)]]
 	s.roundRobinIndex++
 	return worker
 }
@@ -225,6 +222,16 @@ func (s *CoordinatorServer) SendHeartbeat(ctx context.Context, in *pb.HeartbeatR
 			grpcConnection:      conn,
 			workerServiceClient: pb.NewWorkerServiceClient(conn),
 		}
+
+		workerCount := len(s.WorkerPool)
+
+		s.WorkerPoolKeysMutex.Lock()
+		s.WorkerPoolKeys = make([]uint32, 0, workerCount)
+		for k := range s.WorkerPool {
+			s.WorkerPoolKeys = append(s.WorkerPoolKeys, k)
+		}
+		s.WorkerPoolKeysMutex.Unlock()
+
 		log.Println("Registered worker:", workerID)
 	}
 
