@@ -284,7 +284,7 @@ func (s *CoordinatorServer) executeAllScheduledTasks() {
 		}
 	}()
 
-	rows, err := tx.Query(ctx, `SELECT id, command FROM tasks WHERE scheduled_at < (NOW() + INTERVAL '30 seconds') AND picked_at IS NULL FOR UPDATE SKIP LOCKED`)
+	rows, err := tx.Query(ctx, `SELECT id, command FROM tasks WHERE scheduled_at < (NOW() + INTERVAL '30 seconds') AND picked_at IS NULL ORDER BY scheduled_at FOR UPDATE SKIP LOCKED`)
 	if err != nil {
 		log.Printf("Error executing query: %v\n", err)
 		return
